@@ -1,5 +1,5 @@
 Package: BeQut
-Title: Bayesian estimation for Quantile regression models
+Title: Bayesian estimation for Quantile regression mixed models
 Version: 0.0.0.9000
 Authors@R: c(person("Antoine", "Barbieri", role = c("aut", "cre"), email = "antoine.barbieri@u-bordeaux.fr"),person("Hélène", "Jacqmin-Gadda", role = c("aut"), email = "helene.jacqmin-gadda@u-bordeaux.fr")) 
 Maintainer: Antoine Barbieri <antoine.barbieri@u-bordeaux.fr>
