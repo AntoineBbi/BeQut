@@ -64,7 +64,7 @@ qrjm(
 
 \item{save_jagsUI}{If TRUE (by default), the output of jagsUI package is returned by the function}
 
-\item{save_va}{If TRUE (is FALSE by default), the draws of auxilary variable W is returned by the function}
+\item{save_va}{If TRUE (is FALSE by default), the draws of auxiliary variable W is returned by the function}
 
 \item{parallel}{see jagsUI::jags() function}
 }

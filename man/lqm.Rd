@@ -51,8 +51,8 @@ A \code{BQt} object which is a list with the following elements:
 \item{\code{data}}{data included in argument}
 \item{\code{sims.list}}{list of the MCMC chains of the parameters and random effects}
 \item{\code{control}}{list of arguments giving details about the estimation}
-\item{\code{W}}{list including both posterior mean and posterior standard deviation of subject-specific random varaible W}
-\item{\code{out_jagsUI}}{only if \code{save_jagsUI=TRUE} in argument: list including posterior mean, median, quantiles (2.5\%, 25\%, 50\%, 75\%, 97.5\%), standart deviation for each parameter and each random effect.
+\item{\code{W}}{list including both posterior mean and posterior standard deviation of subject-specific random variable W}
+\item{\code{out_jagsUI}}{only if \code{save_jagsUI=TRUE} in argument: list including posterior mean, median, quantiles (2.5\%, 25\%, 50\%, 75\%, 97.5\%), standard deviation for each parameter and each random effect.
 Moreover, this list also returns the MCMC draws, the Gelman and Rubin diagnostics (see output of jagsUI objects)}
 }
 }

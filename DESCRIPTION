@@ -3,9 +3,9 @@ Title: Bayesian estimation for Quantile regression mixed models
 Version: 0.0.0.9000
 Authors@R: c(person("Antoine", "Barbieri", role = c("aut", "cre"), email = "antoine.barbieri@u-bordeaux.fr"),person("Hélène", "Jacqmin-Gadda", role = c("aut"), email = "helene.jacqmin-gadda@u-bordeaux.fr")) 
 Maintainer: Antoine Barbieri <antoine.barbieri@u-bordeaux.fr>
-Description: BeQut package fits linear quantile regression models such as linear quantile model, 
+Description: Using a bayesian estimation procedure, this package fits linear quantile regression models such as linear quantile model, 
     linear quantile mixed models, quantile regression joint model for time-to-event and longitudinal data.
-    For Bayseian inference, the estimation procedure is based on asymmetric Laplace distribution and the JAGS software is used to get posterior sample.
+    The estimation procedure is based on asymmetric Laplace distribution and the JAGS software is used to get posterior sample.
 Depends: R (>= 3.4.1), jagsUI, lqmm, survival, MASS
 SystemRequirements: JAGS (>= 3.2.0)
 License: GPL (>= 2.0)

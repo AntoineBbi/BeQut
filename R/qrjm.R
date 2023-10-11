@@ -21,7 +21,7 @@
 #' @param n.adapt integer specifying the number of iterations to use for adaptation; default is 5000
 #' @param precision variance by default for vague prior distribution
 #' @param C value used in the zero trick; default is 1000.
-#' @param save_va If TRUE (is FALSE by default), the draws of auxilary variable W is returned by the function
+#' @param save_va If TRUE (is FALSE by default), the draws of auxiliary variable W is returned by the function
 #' @param save_jagsUI If TRUE (by default), the output of jagsUI package is returned by the function
 #' @param parallel see jagsUI::jags() function
 #'
