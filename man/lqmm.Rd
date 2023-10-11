@@ -73,6 +73,7 @@ distribution for residual error.
 }
 \examples{
 
+\dontrun{
 #---- Orthodont data from lqmm package
 data("Orthodont", package = "lqmm")
 
@@ -82,8 +83,8 @@ lqmm_025 <- lqmm(formFixed = distance ~ age,
                  formGroup = ~ Subject,
                  data = Orthodont,
                  tau = 0.25,
-                 n.iter = 1000,
-                 n.burnin = 500)
+                 n.iter = 10000,
+                 n.burnin = 1000)
 
 #---- Get the posterior means
 lqmm_025$mean
@@ -93,6 +94,7 @@ jagsUI::traceplot(lqmm_025$out_jagsUI, parameters = "beta" )
 
 #---- Summary of output
 summary(lqmm_025)
+}
 
 }
 \references{

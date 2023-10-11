@@ -116,10 +116,10 @@ qrjm <- function(formFixed,
   #--- longitudinal part
   data_long <- data[unique(c(all.vars(formGroup),all.vars(formFixed),all.vars(formRandom)))]
   y <- data_long[all.vars(formFixed)][, 1]
-  mfX <- model.frame(formFixed, data = data_long)
-  X <- model.matrix(formFixed, mfX)
-  mfU <- model.frame(formRandom, data = data_long)
-  U <- model.matrix(formRandom, mfU)
+  mfX <- stats::model.frame(formFixed, data = data_long)
+  X <- stats::model.matrix(formFixed, mfX)
+  mfU <- stats::model.frame(formRandom, data = data_long)
+  U <- stats::model.matrix(formRandom, mfU)
   id <- as.integer(data_long[all.vars(formGroup)][,1])
   offset <- as.vector(c(1, 1 + cumsum(tapply(id, id, length))))
   I <- length(unique(id))
@@ -133,7 +133,7 @@ qrjm <- function(formFixed,
                           tau = tau,
                           data = data_long)
   # prior beta parameters
-  priorMean.beta <- coef(tmp_model)
+  priorMean.beta <- coef.lqmm(tmp_model)
   priorTau.beta <- diag(rep(1/10,length(priorMean.beta)))
 
   bis <- as.matrix(lqmm::ranef(tmp_model))
@@ -184,8 +184,8 @@ qrjm <- function(formFixed,
   nTime <- length(Time)                   # number of subject having Time
   zeros <- numeric(nTime)                 # for zero trick in Bayesian procedure
   # design matrice
-  mfZ <- model.frame(formSurv, data = tmp)
-  Z <- model.matrix(formSurv, mfZ)
+  mfZ <- stats::model.frame(formSurv, data = tmp)
+  Z <- stats::model.matrix(formSurv, mfZ)
   # use survival::coxph function to initiated values
   cat("> Initialisation of survival parameter values using 'survival' package. \n")
   tmp_model <- survival::coxph(formSurv,
@@ -220,10 +220,10 @@ qrjm <- function(formFixed,
     stop("\n'timeVar' does not correspond to one of the columns in formulas")
   if (param %in% c("value")) {
     data.id[[timeVar]] <- pmax(Time - lag, 0)
-    mfX.id <- model.frame(formFixed, data = data.id)
-    Xtime <- model.matrix(formFixed, mfX.id)
-    mfU.id <- model.frame(formRandom, data = data.id)
-    Utime <- model.matrix(formRandom, mfU.id)
+    mfX.id <- stats::model.frame(formFixed, data = data.id)
+    Xtime <- stats::model.matrix(formFixed, mfX.id)
+    mfU.id <- stats::model.frame(formRandom, data = data.id)
+    Utime <- stats::model.matrix(formRandom, mfU.id)
     # if (one.RE)
     #   Utime <- cbind(Utime, rep(0, nrow(Utime)))
     jags.data <- c(jags.data, list(Xtime = Xtime, Utime = Utime))
@@ -255,67 +255,257 @@ qrjm <- function(formFixed,
     id.GK <- rep(seq_along(Time), each = K)
     data.id2 <- data.id[id.GK, ]
     data.id2[[timeVar]] <- c(t(st))
-    mfX <- model.frame(formFixed, data = data.id2)
-    mfU <- model.frame(formRandom, data = data.id2)
-    Xs <- model.matrix(formFixed, mfX)
-    Us <- model.matrix(formRandom, mfU)
+    mfX <- stats::model.frame(formFixed, data = data.id2)
+    mfU <- stats::model.frame(formRandom, data = data.id2)
+    Xs <- stats::model.matrix(formFixed, mfX)
+    Us <- stats::model.matrix(formRandom, mfU)
 
     jags.data <- c(jags.data, list(K = K, P = P, st = st, wk = wk, Xs = Xs, Us = Us))
   }
 
-
   #---- Model for JAGS
 
-  # model to consider
-  model <- switch(paste(survMod, RE_ind, param, sep = "/"),
-                  # wishart distribution when RE are considered dependent
-                  `weibull/FALSE/value` = jags_qrjm.weib.value,
-                  # inverse gamma distribution when RE are considered independent
-                  `weibull/TRUE/value` = jags_qrjm.weib.value.IG,
-                  # wishart distribution when RE are considered dependent
-                  `weibull/FALSE/sharedRE` = jags_qrjm.weib.sharedRE,
-                  # inverse gamma distribution when RE are considered independent
-                  `weibull/TRUE/sharedRE` = jags_qrjm.weib.sharedRE.IG
-                  )
+  #---- write jags model in .txt from R function
+  working.directory = getwd()
 
-  # parameters to save in the sampling step
-  parms_to_save <- c("alpha", "alpha.assoc", "beta", "sigma", "b", "covariance.b")
-  if(save_va)
-    parms_to_save <- c(parms_to_save, "va1")
+  # for weibull baseline hazard function and current value as shared association
+  if(param=="value"){
+    if(RE_ind){
+      # inverse gamma distribution when RE are considered as independent
+      jags_code <- "model{
+# constants
+c1 <- (1-2*tau)/(tau*(1-tau))
+c2 <- 2/(tau*(1-tau))
+# likelihood
+for (i in 1:I){
+  # longitudinal part
+  for(j in offset[i]:(offset[i+1]-1)){
+    y[j] ~ dnorm(mu[j], prec[j])
+    va1[j] ~ dexp(1/sigma)
+    prec[j] <- 1/(sigma*c2*va1[j])
+    mu[j] <- inprod(beta[1:ncX], X[j, 1:ncX]) + inprod(b[i, 1:ncU], U[j, 1:ncU]) + c1*va1[j]
+  }#end of j loop
+# random effects
+  for(r in 1:ncU){
+    b[i,r] ~ dnorm(0, prec.Sigma2[r])
+  }
+  # survival part
+  etaBaseline[i] <- inprod(alpha[1: ncZ], Z[i, 1:ncZ])
+  shareY[i] <- inprod(beta[1:ncX], Xtime[i, 1:ncX]) + inprod(b[i, 1:ncU], Utime[i, 1:ncU])
+  log_h1[i] <- log(shape) + (shape - 1) * log(Time[i]) + etaBaseline[i] + alpha.assoc * shareY[i]
+  for (k in 1:K) {
+    shareY.s[i, k] <- inprod(beta[1:ncX], Xs[K * (i - 1) + k, 1:ncX]) + inprod(b[i, 1:ncU], Us[K * (i - 1) + k, 1:ncU])
+    SurvLong[i, k] <- wk[k] * shape * pow(st[i, k], shape - 1) * exp(alpha.assoc * shareY.s[i, k])
+  }
+  log_S1[i] <- (-exp(etaBaseline[i]) * P[i] * sum(SurvLong[i, ]))
+  logL[i] <- event[i]*log_h1[i] + log_S1[i]
+  mlogL[i] <- -logL[i] + C
+  zeros[i] ~ dpois(mlogL[i])
+}#end of i loop
+# priors for longitudinal parameters
+for(rr in 1:ncU){
+  prec.Sigma2[rr] ~ dgamma(priorA.Sigma2, priorB.Sigma2)
+  covariance.b[rr] <- 1/prec.Sigma2[rr]
+}
+beta[1:ncX] ~ dmnorm(priorMean.beta[], priorTau.beta[, ])
+sigma ~ dgamma(priorA.sigma, priorB.sigma)
+# priors for survival parameters
+alpha[1:ncZ] ~ dmnorm(priorMean.alpha[], priorTau.alpha[, ])
+shape ~ dgamma(priorA.shape, priorB.shape)
+alpha.assoc ~ dnorm(0, priorTau.alphaA)
+}"
+    }else{
+      # wishart distribution when RE are considered as dependent
+      jags_code <- "model{
+# constants
+c1 <- (1-2*tau)/(tau*(1-tau))
+c2 <- 2/(tau*(1-tau))
+# likelihood
+for (i in 1:I){
+  # longitudinal part
+  for(j in offset[i]:(offset[i+1]-1)){
+    y[j] ~ dnorm(mu[j], prec[j])
+    va1[j] ~ dexp(1/sigma)
+    prec[j] <- 1/(sigma*c2*va1[j])
+    mu[j] <- inprod(beta[1:ncX], X[j, 1:ncX]) + inprod(b[i, 1:ncU], U[j, 1:ncU]) + c1*va1[j]
+  }#end of j loop
+  # random effects
+  b[i, 1:ncU] ~ dmnorm(mu0[], prec.Sigma2[, ])
+  # survival part
+  etaBaseline[i] <- inprod(alpha[1: ncZ], Z[i, 1:ncZ])
+  shareY[i] <- inprod(beta[1:ncX], Xtime[i, 1:ncX]) + inprod(b[i, 1:ncU], Utime[i, 1:ncU])
+  log_h1[i] <- log(shape) + (shape - 1) * log(Time[i]) + etaBaseline[i] + alpha.assoc * shareY[i]
+  for (k in 1:K) {
+    shareY.s[i, k] <- inprod(beta[1:ncX], Xs[K * (i - 1) + k, 1:ncX]) + inprod(b[i, 1:ncU], Us[K * (i - 1) + k, 1:ncU])
+    SurvLong[i, k] <- wk[k] * shape * pow(st[i, k], shape - 1) * exp(alpha.assoc * shareY.s[i, k])
+  }
+  log_S1[i] <- (-exp(etaBaseline[i]) * P[i] * sum(SurvLong[i, ]))
+  logL[i] <- event[i]*log_h1[i] + log_S1[i]
+  mlogL[i] <- -logL[i] + C
+  zeros[i] ~ dpois(mlogL[i])
+}#end of i loop
+# priors for longitudinal parameters
+prec.Sigma2[1:ncU, 1:ncU] ~ dwish(priorR.Sigma2[, ], priorK.Sigma2)
+covariance.b <- inverse(prec.Sigma2[, ])
+beta[1:ncX] ~ dmnorm(priorMean.beta[], priorTau.beta[, ])
+sigma ~ dgamma(priorA.sigma, priorB.sigma)
+# priors for survival parameters
+alpha[1:ncZ] ~ dmnorm(priorMean.alpha[], priorTau.alpha[, ])
+shape ~ dgamma(priorA.shape, priorB.shape)
+alpha.assoc ~ dnorm(0, priorTau.alphaA)
+}"
+    }
+  # replace inprod
+  # regression from X
+  rplc <- paste(paste("beta[", 1:jags.data$ncX, "] * X[j, ", 1:jags.data$ncX, "]", sep = ""), collapse = " + ")
+  jags_code <- gsub("inprod(beta[1:ncX], X[j, 1:ncX])", rplc, jags_code, fixed = TRUE)
+  # regression for random effects b
+  rplc <- paste(paste("b[i, ", 1:jags.data$ncU, "] * U[j, ", 1:jags.data$ncU, "]", sep = ""), collapse = " + ")
+  jags_code <- gsub("inprod(b[i, 1:ncU], U[j, 1:ncU])", rplc, jags_code, fixed = TRUE)
+  # regression on survival part for time-independant covariates
+  rplc <- paste(paste("alpha[", 1:jags.data$ncZ, "] * Z[i, ", 1:jags.data$ncZ, "]", sep = ""), collapse = " + ")
+  jags_code <- gsub("inprod(alpha[1: ncZ], Z[i, 1:ncZ])", rplc, jags_code, fixed = TRUE)
+  # regression on survival part for share association in hazard function
+  rplc <- paste(paste("beta[", 1:jags.data$ncX, "] * Xtime[i, ", 1:jags.data$ncX, "]", sep = ""), collapse = " + ")
+  jags_code <- gsub("inprod(beta[1:ncX], Xtime[i, 1:ncX])", rplc, jags_code, fixed = TRUE)
+  rplc <- paste(paste("b[i, ", 1:jags.data$ncU, "] * Utime[i, ", 1:jags.data$ncU, "]", sep = ""), collapse = " + ")
+  jags_code <- gsub("inprod(b[i, 1:ncU], Utime[i, 1:ncU])", rplc, jags_code, fixed = TRUE)
+  # regression on survival part for share association in survival function with GK intergration
+  rplc <- paste(paste("beta[", 1:jags.data$ncX, "] * Xs[K * (i - 1) + k, ", 1:jags.data$ncX, "]", sep = ""), collapse = " + ")
+  jags_code <- gsub("inprod(beta[1:ncX], Xs[K * (i - 1) + k, 1:ncX])", rplc, jags_code, fixed = TRUE)
+  rplc <- paste(paste("b[i,", 1:jags.data$ncU, "] * Us[K * (i - 1) + k, ", 1:jags.data$ncU, "]", sep = ""), collapse = " + ")
+  jags_code <- gsub("inprod(b[i, 1:ncU], Us[K * (i - 1) + k, 1:ncU])", rplc, jags_code, fixed = TRUE)
+  # write the model
+  writeLines(jags_code, file.path(working.directory,"JagsModel.txt"))
 
-  # complement given survMod
-  if(survMod == "weibull"){
-    jags.data <- c(jags.data, list(priorA.shape = 1/precision, priorB.shape = 1/precision))
-    parms_to_save <- c(parms_to_save, "shape")
   }
 
-  # # initial values to improve chain convergence
-  # initial.values <- list(gamma = priorMean.gamma,
-  #                        alpha = priorMean.alpha,
-  #                        shape = 3)
+  # for weibull baseline hazard function and shared random effects as association
+  if(param=="sharedRE"){
+    if(RE_ind){
+      # inverse gamma distribution when RE are considered as independent
+      jags_code <- "model{
+# constants
+  c1 <- (1-2*tau)/(tau*(1-tau))
+  c2 <- 2/(tau*(1-tau))
+  # likelihood
+  for (i in 1:I){
+    # longitudinal part
+    for(j in offset[i]:(offset[i+1]-1)){
+      y[j] ~ dnorm(mu[j], prec[j])
+      va1[j] ~ dexp(1/sigma)
+      prec[j] <- 1/(sigma*c2*va1[j])
+      mu[j] <- inprod(beta[1:ncX], X[j, 1:ncX]) + inprod(b[i, 1:ncU], U[j, 1:ncU]) + c1*va1[j]
+    }#end of j loop
+    # random effects
+    for(r in 1:ncU){
+      b[i,r] ~ dnorm(0, prec.Sigma2[r])
+    }
+    # survival part
+    etaBaseline[i] <- inprod(alpha[1: ncZ], Z[i, 1:ncZ]) + inprod(alpha.assoc[1:ncU], b[i, 1:ncU])
+    log_S1[i] <- -exp(etaBaseline[i]) * pow(Time[i], shape)
+    log_h1[i] <- log(shape) + (shape-1)*log(Time[i]) + etaBaseline[i]
+    logL[i] <- event[i]*log_h1[i] + log_S1[i]
+    mlogL[i] <- -logL[i] + C
+    zeros[i] ~ dpois(mlogL[i])
+  }#end of i loop
+  # priors for longitudinal parameters
+  for(rr in 1:ncU){
+    prec.Sigma2[rr] ~ dgamma(priorA.Sigma2, priorB.Sigma2)
+    covariance.b[rr] <- 1/prec.Sigma2[rr]
+  }
+  beta[1:ncX] ~ dmnorm(priorMean.beta[], priorTau.beta[, ])
+  sigma ~ dgamma(priorA.sigma, priorB.sigma)
+  # priors for survival parameters
+  alpha[1:ncZ] ~ dmnorm(priorMean.alpha[], priorTau.alpha[, ])
+  shape ~ dgamma(priorA.shape, priorB.shape)
+  for(rr in 1:ncU){
+    alpha.assoc[rr] ~ dnorm(0, priorTau.alphaA)
+  }
+}"
+    }else{
+    # wishart distribution when RE are considered as dependent
+    jags_code <- "model{
+# constants
+  c1 <- (1-2*tau)/(tau*(1-tau))
+  c2 <- 2/(tau*(1-tau))
+  # likelihood
+  for (i in 1:I){
+    # longitudinal part
+    for(j in offset[i]:(offset[i+1]-1)){
+      y[j] ~ dnorm(mu[j], prec[j])
+      va1[j] ~ dexp(1/sigma)
+      prec[j] <- 1/(sigma*c2*va1[j])
+      mu[j] <- inprod(beta[1:ncX], X[j, 1:ncX]) + inprod(b[i, 1:ncU], U[j, 1:ncU]) + c1*va1[j]
+    }#end of j loop
+    # random effects
+    b[i, 1:ncU] ~ dmnorm(mu0[], prec.Sigma2[, ])
+    # survival part
+    etaBaseline[i] <- inprod(alpha[1: ncZ], Z[i, 1:ncZ]) + inprod(alpha.assoc[1:ncU], b[i, 1:ncU])
+    log_S1[i] <- -exp(etaBaseline[i]) * pow(Time[i], shape)
+    log_h1[i] <- log(shape) + (shape-1)*log(Time[i]) + etaBaseline[i]
+    logL[i] <- event[i]*log_h1[i] + log_S1[i]
+    mlogL[i] <- -logL[i] + C
+    zeros[i] ~ dpois(mlogL[i])
+  }#end of i loop
+  # priors for longitudinal parameters
+  prec.Sigma2[1:ncU, 1:ncU] ~ dwish(priorR.Sigma2[, ], priorK.Sigma2)
+  covariance.b <- inverse(prec.Sigma2[, ])
+  beta[1:ncX] ~ dmnorm(priorMean.beta[], priorTau.beta[, ])
+  sigma ~ dgamma(priorA.sigma, priorB.sigma)
+  # priors for survival parameters
+  alpha[1:ncZ] ~ dmnorm(priorMean.alpha[], priorTau.alpha[, ])
+  shape ~ dgamma(priorA.shape, priorB.shape)
+  for(rr in 1:ncU){
+    alpha.assoc[rr] ~ dnorm(0, priorTau.alphaA)
+  }
+}"
+  }
 
-  #-- write jags model in txt from R function
-  working.directory = getwd()
-  write.model.jags(model = model,
-                   name_model = "jags_qrjm",
-                   intitled = file.path(working.directory, "JagsModel.txt"),
-                   Data = jags.data,
-                   param = param)
+  # replace inprod
+  # regression from X
+  rplc <- paste(paste("beta[", 1:jags.data$ncX, "] * X[j, ", 1:jags.data$ncX, "]", sep = ""), collapse = " + ")
+  jags_code <- gsub("inprod(beta[1:ncX], X[j, 1:ncX])", rplc, jags_code, fixed = TRUE)
+  # regression for random effects b
+  rplc <- paste(paste("b[i, ", 1:jags.data$ncU, "] * U[j, ", 1:jags.data$ncU, "]", sep = ""), collapse = " + ")
+  jags_code <- gsub("inprod(b[i, 1:ncU], U[j, 1:ncU])", rplc, jags_code, fixed = TRUE)
+  # regression on survival part for time-independant covariates
+  rplc <- paste(paste("alpha[", 1:jags.data$ncZ, "] * Z[i, ", 1:jags.data$ncZ, "]", sep = ""), collapse = " + ")
+  jags_code <- gsub("inprod(alpha[1: ncZ], Z[i, 1:ncZ])", rplc, jags_code, fixed = TRUE)
+  # regression on survival part for shared association in both hazard survival function
+  rplc <- paste(paste("alpha.assoc[", 1:jags.data$ncU, "] * b[i,  ", 1:jags.data$ncU, "]", sep = ""), collapse = " + ")
+  jags_code <- gsub("inprod(alpha.assoc[1:ncU], b[i, 1:ncU])", rplc, jags_code, fixed = TRUE)
+  # write the model
+  writeLines(jags_code, file.path(working.directory,"JagsModel.txt"))
 
+}
 
-  #---- use JAGS sampler
-  # if (!require("rjags"))
-  #   stop("'rjags' is required.\n")
-
-  if(n.chains==3)
+  # initialisation values
+  if (n.chains == 3)
     inits <- list(initial.values,
                   initial.values,
                   initial.values)
-  if(n.chains==2)
+  if (n.chains == 2)
     inits <- list(initial.values,
                   initial.values)
-  if(n.chains==1)
+  if (n.chains == 1)
     inits <- initial.values
+
+  # parameters to save in the sampling step
+  parms_to_save <- c("alpha", "alpha.assoc", "beta", "sigma", "b", "covariance.b")
+  if (save_va)
+    parms_to_save <- c(parms_to_save, "va1")
+
+  # complement given survMod
+  if (survMod == "weibull") {
+    jags.data <-
+      c(jags.data,
+        list(
+          priorA.shape = 1 / precision,
+          priorB.shape = 1 / precision
+       ))
+    parms_to_save <- c(parms_to_save, "shape")
+  }
 
   # using jagsUI
   out_jags = jagsUI::jags(data = jags.data,
@@ -384,7 +574,7 @@ qrjm <- function(formFixed,
   # modes of parameters
   out$modes <- lapply(out$sims.list, function(x) {
     m <- function(x) {
-      d <- density(x, bw = "nrd", adjust = 3, n = 1000)
+      d <- stats::density(x, bw = "nrd", adjust = 3, n = 1000)
       d$x[which.max(d$y)]
     }
     if (is.matrix(x))
@@ -399,10 +589,10 @@ qrjm <- function(formFixed,
   # standard error of parameters
   out$StErr <- lapply(out$sims.list, function(x) {
     f <- function(x) {
-      acf.x <- drop(acf(x, lag.max = 0.4 * length(x), plot = FALSE)$acf)[-1]
+      acf.x <- drop(stats::acf(x, lag.max = 0.4 * length(x), plot = FALSE)$acf)[-1]
       acf.x <- acf.x[seq_len(rle(acf.x > 0)$lengths[1])]
       ess <- length(x)/(1 + 2 * sum(acf.x))
-      sqrt(var(x)/ess)
+      sqrt(stats::var(x)/ess)
     }
     if (is.matrix(x))
       as.array(apply(x, 2, f))
@@ -500,8 +690,13 @@ qrjm <- function(formFixed,
   colnames(out$CIs$alpha) <- c("2.5%", "97.5%")
 
   # only for diagonal elements of covariance matrix of random effects
-  out$CIs$variances.b <- cbind(as.vector(diag(out_jags$q2.5$covariance.b)),
-                               as.vector(diag(out_jags$q97.5$covariance.b)))
+  if(RE_ind){
+    out$CIs$variances.b <- cbind(as.vector(out_jags$q2.5$covariance.b),
+                                 as.vector(out_jags$q97.5$covariance.b))
+  }else{
+    out$CIs$variances.b <- cbind(as.vector(diag(out_jags$q2.5$covariance.b)),
+                                 as.vector(diag(out_jags$q97.5$covariance.b)))
+  }
   rownames(out$CIs$variances.b) <- colnames(U)
   colnames(out$CIs$variances.b) <- c("2.5%", "97.5%")
 
@@ -509,7 +704,7 @@ qrjm <- function(formFixed,
   if(save_jagsUI)
     out$out_jagsUI <- out_jags
 
-  #---- End of the function defining the class and retruning the output
+  #---- End of the function defining the class and returning the output
   class(out) <- "Bqrjm"
   out
 

@@ -61,6 +61,8 @@ Function using JAGS to estimate the linear quantile regression model assuming as
 distribution for residual error.
 }
 \examples{
+
+\dontrun{
 #---- Use data
 data(wave)
 
@@ -79,6 +81,7 @@ jagsUI::traceplot(lqm_025$out_jagsUI, parameters = "beta" )
 
 #---- Summary of output
 summary(lqm_025)
+}
 
 }
 \author{

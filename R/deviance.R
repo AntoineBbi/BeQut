@@ -56,10 +56,10 @@ deviance <- function(object, M=1000, conditional="survival", verbose = TRUE){
   # longitudinal
   data <- object$data[unique(c(all.vars(object$control$formGroup),all.vars(object$control$formFixed),all.vars(object$control$formRandom)))]
   y <- data[all.vars(object$control$formFixed)][, 1]
-  mfX <- model.frame(object$control$formFixed, data = data)
-  X <- model.matrix(object$control$formFixed, mfX)
-  mfU <- model.frame(object$control$formRandom, data = data)
-  U <- model.matrix(object$control$formRandom, mfU)
+  mfX <- stats::model.frame(object$control$formFixed, data = data)
+  X <- stats::model.matrix(object$control$formFixed, mfX)
+  mfU <- stats::model.frame(object$control$formRandom, data = data)
+  U <- stats::model.matrix(object$control$formRandom, mfU)
   id <- as.integer(data[all.vars(object$control$formGroup)][,1])
   offset <- as.vector(c(1, 1 + cumsum(tapply(id, id, length))))
   I <- length(unique(id))
@@ -69,17 +69,17 @@ deviance <- function(object, M=1000, conditional="survival", verbose = TRUE){
   tmp <- unique(tmp)
   Time <- tmp[all.vars(object$control$formSurv)][, 1]    # matrix of observed time such as Time=min(Tevent,Tcens)
   event <- tmp[all.vars(object$control$formSurv)][, 2]   # vector of event indicator (delta)
-  mfZ <- model.frame(object$control$formSurv, data = tmp)
-  Z <- model.matrix(object$control$formSurv, mfZ)
+  mfZ <- stats::model.frame(object$control$formSurv, data = tmp)
+  Z <- stats::model.matrix(object$control$formSurv, mfZ)
 
   # data management for shared latent structure
   if(object$control$param=="value"){
     data.id <- object$data[!duplicated(id), ]
     data.id[[object$control$timeVar]] <- Time
-    mfX.id <- model.frame(object$control$formFixed, data = data.id)
-    Xtime <- model.matrix(object$control$formFixed, mfX.id)
-    mfU.id <- model.frame(object$control$formRandom, data = data.id)
-    Utime <- model.matrix(object$control$formRandom, mfU.id)
+    mfX.id <- stats::model.frame(object$control$formFixed, data = data.id)
+    Xtime <- stats::model.matrix(object$control$formFixed, mfX.id)
+    mfU.id <- stats::model.frame(object$control$formRandom, data = data.id)
+    Utime <- stats::model.matrix(object$control$formRandom, mfU.id)
     # approxitmation of the intergral via the Gaussian quadrature (Gauss Kronrod rule)
     sk <- c(-0.949107912342758524526189684047851, -0.741531185599394439863864773280788, -0.405845151377397166906606412076961, 0,
             0.405845151377397166906606412076961, 0.741531185599394439863864773280788, 0.949107912342758524526189684047851, -0.991455371120812639206854697526329,
@@ -95,10 +95,10 @@ deviance <- function(object, M=1000, conditional="survival", verbose = TRUE){
     id.GK <- rep(seq_along(Time), each = K)
     data.id2 <- data.id[id.GK, ]
     data.id2[[object$control$timeVar]] <- c(t(st))
-    mfX <- model.frame(object$control$formFixed, data = data.id2)
-    mfU <- model.frame(object$control$formRandom, data = data.id2)
-    Xs <- model.matrix(object$control$formFixed, mfX)
-    Us <- model.matrix(object$control$formRandom, mfU)
+    mfX <- stats::model.frame(object$control$formFixed, data = data.id2)
+    mfU <- stats::model.frame(object$control$formRandom, data = data.id2)
+    Xs <- stats::model.matrix(object$control$formFixed, mfX)
+    Us <- stats::model.matrix(object$control$formRandom, mfU)
   }
 
   # get parameter etimations
@@ -181,7 +181,7 @@ deviance <- function(object, M=1000, conditional="survival", verbose = TRUE){
 
     #  Give method's progress
     if (verbose == TRUE) {
-      setTxtProgressBar(pb,i)
+      utils::setTxtProgressBar(pb,i)
     }
   }
 

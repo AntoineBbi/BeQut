@@ -48,6 +48,7 @@
 #'
 #' @examples
 #'
+#' \dontrun{
 #' #---- Orthodont data from lqmm package
 #' data("Orthodont", package = "lqmm")
 #'
@@ -57,8 +58,8 @@
 #'                  formGroup = ~ Subject,
 #'                  data = Orthodont,
 #'                  tau = 0.25,
-#'                  n.iter = 1000,
-#'                  n.burnin = 500)
+#'                  n.iter = 10000,
+#'                  n.burnin = 1000)
 #'
 #' #---- Get the posterior means
 #' lqmm_025$mean
@@ -68,6 +69,7 @@
 #'
 #' #---- Summary of output
 #' summary(lqmm_025)
+#' }
 #'
 lqmm <- function(formFixed,
                  formRandom,
@@ -88,10 +90,10 @@ lqmm <- function(formFixed,
   #-- data management
   data_long <- data[unique(c(all.vars(formGroup),all.vars(formFixed),all.vars(formRandom)))]
   y <- data_long[all.vars(formFixed)][, 1]
-  mfX <- model.frame(formFixed, data = data_long)
-  X <- model.matrix(formFixed, mfX)
-  mfU <- model.frame(formRandom, data = data_long)
-  U <- model.matrix(formRandom, mfU)
+  mfX <- stats::model.frame(formFixed, data = data_long)
+  X <- stats::model.matrix(formFixed, mfX)
+  mfU <- stats::model.frame(formRandom, data = data_long)
+  U <- stats::model.matrix(formRandom, mfU)
   id <- as.integer(data_long[all.vars(formGroup)][,1])
   if(!("id" %in% colnames(data_long)))
     data_long <- cbind(data_long, id = id)
@@ -105,7 +107,7 @@ lqmm <- function(formFixed,
                           tau = tau,
                           data = data_long)
   # prior beta parameters
-  priorMean.beta <- coef(tmp_model)
+  priorMean.beta <- coef.lqmm(tmp_model)
   priorTau.beta <- diag(rep(1/10,length(priorMean.beta)))
 
   bis <- as.matrix(lqmm::ranef(tmp_model))
@@ -146,27 +148,71 @@ lqmm <- function(formFixed,
                    )
     initial.values$prec.Sigma2 <- diag(1/VarCorr(tmp_model))
   }
-  model <- switch(paste(RE_ind, sep = "/"),
-                  # wishart distribution when more than one RE is considered
-                  `FALSE` = jags_lqmm,
-                  # inverse gamma distribution when only one RE is considered
-                  `TRUE` = jags_lqmm_IG
-                  )
-
-  # parameters to save in the sampling step
-  parms_to_save <- c("beta", "sigma", "b", "covariance.b")
 
   #---- write jags model in txt from R function
   working.directory = getwd()
-  write.model.jags(model = model,
-                   name_model = "jags_lqmm",
-                   intitled = file.path(working.directory,"JagsModel.txt"),
-                   Data = jags.data)
 
-  #---- use JAGS sampler
-  # if (!require("rjags"))
-  #   stop("'rjags' is required.\n")
+  if(RE_ind){
+    jags_code <- "model{
+  # constants
+  c1 <- (1-2*tau)/(tau*(1-tau))
+  c2 <- 2/(tau*(1-tau))
+  # likelihood
+  for (i in 1:I){
+    # longitudinal part
+    for(j in offset[i]:(offset[i+1]-1)){
+      y[j] ~ dnorm(mu[j], prec[j])
+      va1[j] ~ dexp(1/sigma)
+      prec[j] <- 1/(sigma*c2*va1[j])
+      mu[j] <- inprod(beta[1:ncX], X[j, 1:ncX]) + inprod(b[i, 1:ncU], U[j, 1:ncU]) + c1*va1[j]
+    }#end of j loop
+    # random effects
+    for(r in 1:ncU){
+      b[i,r] ~ dnorm(0, prec.Sigma2[r])
+    }
+  }#end of i loop
+  # priors for parameters
+  for(rr in 1:ncU){
+    prec.Sigma2[rr] ~ dgamma(priorA.Sigma2, priorB.Sigma2)
+    covariance.b[rr] <- 1/prec.Sigma2[rr]
+  }
+  beta[1:ncX] ~ dmnorm(priorMean.beta[], priorTau.beta[, ])
+  sigma ~ dgamma(priorA.sigma, priorB.sigma)
+}"
+  }else{
+    jags_code <- "model{
+  # constants
+  c1 <- (1-2*tau)/(tau*(1-tau))
+  c2 <- 2/(tau*(1-tau))
+  # likelihood
+  for (i in 1:I){
+    # longitudinal part
+    for(j in offset[i]:(offset[i+1]-1)){
+      y[j] ~ dnorm(mu[j], prec[j])
+      va1[j] ~ dexp(1/sigma)
+      prec[j] <- 1/(sigma*c2*va1[j])
+      mu[j] <- inprod(beta[1:ncX], X[j, 1:ncX]) + inprod(b[i, 1:ncU], U[j, 1:ncU]) + c1*va1[j]
+    }#end of j loop
+    # random effects
+    b[i, 1:ncU] ~ dmnorm(mu0[], prec.Sigma2[, ])
+  }#end of i loop
+  # priors for parameters
+  prec.Sigma2[1:ncU, 1:ncU] ~ dwish(priorR.Sigma2[, ], priorK.Sigma2)
+  covariance.b <- inverse(prec.Sigma2[, ])
+  beta[1:ncX] ~ dmnorm(priorMean.beta[], priorTau.beta[, ])
+  sigma ~ dgamma(priorA.sigma, priorB.sigma)
+}"
+  }
 
+  # regression from X
+  rplc <- paste(paste("beta[", 1:jags.data$ncX, "] * X[j, ", 1:jags.data$ncX, "]", sep = ""), collapse = " + ")
+  jags_code <- gsub("inprod(beta[1:ncX], X[j, 1:ncX])", rplc, jags_code, fixed = TRUE)
+  # regression on random effects b
+  rplc <- paste(paste("b[i, ", 1:jags.data$ncU, "] * U[j, ", 1:jags.data$ncU, "]", sep = ""), collapse = " + ")
+  jags_code <- gsub("inprod(b[i, 1:ncU], U[j, 1:ncU])", rplc, jags_code, fixed = TRUE)
+  writeLines(jags_code, file.path(working.directory,"JagsModel.txt"))
+
+  # initialisation values
   if(n.chains==3)
     inits <- list(initial.values,
                   initial.values,
@@ -177,7 +223,11 @@ lqmm <- function(formFixed,
   if(n.chains==1)
     inits <- initial.values
 
-  # using jagsUI
+
+  # parameters to save in the sampling step
+  parms_to_save <- c("beta", "sigma", "b", "covariance.b")
+
+  #---- use JAGS sampler via jagsUI
   out_jags = jagsUI::jags(data = jags.data,
                           parameters.to.save = parms_to_save,
                           model.file = "JagsModel.txt",
@@ -194,7 +244,9 @@ lqmm <- function(formFixed,
 
   #---- output
   out <- list(data = data)
-  out$control <- list(formula = formula,
+  out$control <- list(formFixed = formFixed,
+                      formRandom = formRandom,
+                      formGroup = formGroup,
                       tau = tau,
                       call_function = "lqmm",
                       n.chains = n.chains,
@@ -229,7 +281,7 @@ lqmm <- function(formFixed,
   # modes of parameters
   out$modes <- lapply(out$sims.list, function(x) {
     m <- function(x) {
-      d <- density(x, bw = "nrd", adjust = 3, n = 1000)
+      d <- stats::density(x, bw = "nrd", adjust = 3, n = 1000)
       d$x[which.max(d$y)]
     }
     if (is.matrix(x))
@@ -244,10 +296,10 @@ lqmm <- function(formFixed,
   # standard error of parameters
   out$StErr <- lapply(out$sims.list, function(x) {
     f <- function(x) {
-      acf.x <- drop(acf(x, lag.max = 0.4 * length(x), plot = FALSE)$acf)[-1]
+      acf.x <- drop(stats::acf(x, lag.max = 0.4 * length(x), plot = FALSE)$acf)[-1]
       acf.x <- acf.x[seq_len(rle(acf.x > 0)$lengths[1])]
       ess <- length(x)/(1 + 2 * sum(acf.x))
-      sqrt(var(x)/ess)
+      sqrt(stats::var(x)/ess)
     }
     if (is.matrix(x))
       as.array(apply(x, 2, f))

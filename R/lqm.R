@@ -37,6 +37,8 @@
 #' @export
 #'
 #' @examples
+#'
+#' \dontrun{
 #' #---- Use data
 #' data(wave)
 #'
@@ -55,6 +57,7 @@
 #'
 #' #---- Summary of output
 #' summary(lqm_025)
+#' }
 #'
 lqm <- function(formula,
                 data,
@@ -73,8 +76,8 @@ lqm <- function(formula,
   I <- nrow(tmp)
   # design matrices
   y <- data[all.vars(formula)][,1]
-  mfX <- model.frame(formula, data = tmp)
-  X <- model.matrix(formula, mfX)
+  mfX <- stats::model.frame(formula, data = tmp)
+  X <- stats::model.matrix(formula, mfX)
   ncX <- ncol(X)
   # use lm function to initiated values
   lm_tmp <- stats::lm(formula,
@@ -97,17 +100,30 @@ lqm <- function(formula,
 
   #---- write jags model in txt from R function
   working.directory = getwd()
-  write.model.jags(model = jags_lqm,
-                   name_model = "jags_lqm",
-                   intitled = file.path(working.directory,"JagsModel.txt"),
-                   Data = jags.data)
 
-  # jags argument
+  jags_code <- "model{
+  # constants
+  c1 <- (1-2*tau)/(tau*(1-tau))
+  c2 <- 2/(tau*(1-tau))
+  # quantile linear regression
+  for (i in 1:I){
+    y[i] ~ dnorm(mu[i], prec[i])
+    va1[i] ~ dexp(1/sigma)
+    prec[i] <- 1/(sigma*c2*va1[i])
+    mu[i] <- inprod(beta[1:ncX], X[i, 1:ncX]) + c1*va1[i]
+  }#end of i loop
+  # priors for parameters
+  for(p in 1:ncX){
+    beta[p] ~ dnorm(0, 0.001)
+  }
+  sigma ~ dgamma(0.001, 0.001)
+}"
+  rplc <- paste(paste("beta[", 1:jags.data$ncX, "] * X[i, ", 1:jags.data$ncX, "]", sep = ""), collapse = " + ")
+  jags_code <- gsub("inprod(beta[1:ncX], X[i, 1:ncX])", rplc, jags_code, fixed = TRUE)
+  writeLines(jags_code, file.path(working.directory,"JagsModel.txt"))
+
+  # posterior samples to save
   parms_to_save <- c("beta", "sigma", "va1")
-
-  #---- use JAGS sampler
-  # if (!require("rjags"))
-  #   stop("'rjags' is required.\n")
 
   # using jagsUI
   out_jags = jagsUI::jags(data = jags.data,
@@ -156,7 +172,7 @@ lqm <- function(formula,
   # modes of parameters
   out$modes <- lapply(out$sims.list, function(x) {
     m <- function(x) {
-      d <- density(x, bw = "nrd", adjust = 3, n = 1000)
+      d <- stats::density(x, bw = "nrd", adjust = 3, n = 1000)
       d$x[which.max(d$y)]
     }
     if (is.matrix(x))
@@ -171,10 +187,10 @@ lqm <- function(formula,
   # standard error of parameters
   out$StErr <- lapply(out$sims.list, function(x) {
     f <- function(x) {
-      acf.x <- drop(acf(x, lag.max = 0.4 * length(x), plot = FALSE)$acf)[-1]
+      acf.x <- drop(stats::acf(x, lag.max = 0.4 * length(x), plot = FALSE)$acf)[-1]
       acf.x <- acf.x[seq_len(rle(acf.x > 0)$lengths[1])]
       ess <- length(x)/(1 + 2 * sum(acf.x))
-      sqrt(var(x)/ess)
+      sqrt(stats::var(x)/ess)
     }
     if (is.matrix(x))
       as.array(apply(x, 2, f))
