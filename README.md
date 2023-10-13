@@ -1,3 +1,7 @@
+  <!-- badges: start -->
+  [![R-CMD-check](https://github.com/AntoineBbi/BeQut/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/AntoineBbi/BeQut/actions/workflows/R-CMD-check.yaml)
+  <!-- badges: end -->
+
 # BeQut
 
 **BeQut** is a R-package for Bayesian estimation of quantile regression mixed models. Based on the asymmetric Laplace distribution, it also allows to estimate joint models for longitudinal and time-to-event data, linear mixed effects models and simple linear models.
