@@ -9,7 +9,7 @@
 #' @name wave
 #' @docType data
 #'
-#' @format A data.frame with 453 observations (rows) and 25 variables with explicite names. The first variables are:
+#' @format A data.frame with 453 observations (rows) and 25 variables with explicit names. The first variables are:
 #' \describe{
 #'   \item{date}{date of measure}
 #'   \item{temperature}{temperature}

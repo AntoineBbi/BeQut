@@ -18,7 +18,7 @@ qrjm(
   n.chains = 3,
   n.iter = 10000,
   n.burnin = 5000,
-  n.thin = 5,
+  n.thin = 1,
   n.adapt = 5000,
   precision = 10,
   C = 1000,
@@ -52,7 +52,7 @@ qrjm(
 
 \item{n.iter}{integer specifying the total number of iterations; default is 10000}
 
-\item{n.burnin}{integer specifying how many of n.iter to discard as burn-in ; default is 5000}
+\item{n.burnin}{integer specifying how many of \code{n.iter} to discard as burn-in ; default is 5000}
 
 \item{n.thin}{integer specifying the thinning of the chains; default is 1}
 
@@ -62,14 +62,14 @@ qrjm(
 
 \item{C}{value used in the zero trick; default is 1000.}
 
-\item{save_jagsUI}{If TRUE (by default), the output of jagsUI package is returned by the function}
+\item{save_jagsUI}{If \code{TRUE} (by default), the output of \code{jagsUI} package is returned by the function}
 
-\item{save_va}{If TRUE (is FALSE by default), the draws of auxiliary variable W is returned by the function}
+\item{save_va}{If \code{TRUE} (is \code{FALSE} by default), the draws of auxiliary variable W is returned by the function}
 
-\item{parallel}{see jagsUI::jags() function}
+\item{parallel}{see \code{jagsUI::jags()} function}
 }
 \value{
-A \code{BQt} object is a list with the following elements:
+A \code{Bqrjm} object is a list with the following elements:
 \describe{
 \item{\code{mean}}{list of posterior mean for each parameter}
 \item{\code{median}}{list of posterior median for each parameter}
@@ -86,34 +86,34 @@ Moreover, this list also returns the MCMC draws, the Gelman and Rubin diagnostic
 }
 }
 \description{
-Function using JAGS via jagsUI package to estimate the quantile regression joint model assuming asymmetric Laplace distribution for residual error.
+Function using 'JAGS' software via \code{jagsUI} package to estimate the quantile regression joint model assuming asymmetric Laplace distribution for residual error.
 Joint modeling concerns longitudinal data and time-to-event
 }
 \examples{
 
-\dontrun{
-#---- use the data 'aids' from joineR package
-data("aids", package = "joineR")
+if(interactive()){
+#---- load data
+data(dataLong)
 
 #---- Fit quantile regression joint model for the first quartile
-qrjm_25 <- qrjm(formFixed = CD4 ~ obstime,
-               formRandom = ~ obstime,
-               formGroup = ~ id,
-               formSurv = Surv(time, death) ~ drug + gender + prevOI + AZT,
+qrjm_75 <- qrjm(formFixed = y ~ visit,
+               formRandom = ~ visit,
+               formGroup = ~ ID,
+               formSurv = Surv(time, event) ~ X1 + X2,
                survMod = "weibull",
                param = "value",
-               timeVar= "obstime",
-               data = aids,
-               tau = 0.25)
+               timeVar= "visit",
+               data = dataLong,
+               tau = 0.75)
 
 #---- Visualize the trace for beta parameters
-jagsUI::traceplot(qrjm_25$out_jagsUI, parameters = "beta")
+jagsUI::traceplot(qrjm_75$out_jagsUI, parameters = "beta")
 
-#---- Get the estimated coefficients : posterior means
-qrjm_25$mean
+#---- Get the estimated coefficients: posterior means
+qrjm_75$mean
 
 #---- Summary of output
-summary(qrjm_25)
+summary(qrjm_75)
 }
 
 }

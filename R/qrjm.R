@@ -1,6 +1,6 @@
 #' \code{qrjm} fits quantile regression joint model
 #'
-#' Function using JAGS via jagsUI package to estimate the quantile regression joint model assuming asymmetric Laplace distribution for residual error.
+#' Function using 'JAGS' software via \code{jagsUI} package to estimate the quantile regression joint model assuming asymmetric Laplace distribution for residual error.
 #' Joint modeling concerns longitudinal data and time-to-event
 #'
 #'
@@ -16,17 +16,17 @@
 #' @param RE_ind Boolean denoting if the random effects are assumed independent ; default is \code{FALSE}
 #' @param n.chains the number of parallel chains for the model; default is 1.
 #' @param n.iter integer specifying the total number of iterations; default is 10000
-#' @param n.burnin integer specifying how many of n.iter to discard as burn-in ; default is 5000
+#' @param n.burnin integer specifying how many of \code{n.iter} to discard as burn-in ; default is 5000
 #' @param n.thin integer specifying the thinning of the chains; default is 1
 #' @param n.adapt integer specifying the number of iterations to use for adaptation; default is 5000
 #' @param precision variance by default for vague prior distribution
 #' @param C value used in the zero trick; default is 1000.
-#' @param save_va If TRUE (is FALSE by default), the draws of auxiliary variable W is returned by the function
-#' @param save_jagsUI If TRUE (by default), the output of jagsUI package is returned by the function
-#' @param parallel see jagsUI::jags() function
+#' @param save_va If \code{TRUE} (is \code{FALSE} by default), the draws of auxiliary variable W is returned by the function
+#' @param save_jagsUI If \code{TRUE} (by default), the output of \code{jagsUI} package is returned by the function
+#' @param parallel see \code{jagsUI::jags()} function
 #'
 #'
-#' @return A \code{BQt} object is a list with the following elements:
+#' @return A \code{Bqrjm} object is a list with the following elements:
 #'  \describe{
 #'   \item{\code{mean}}{list of posterior mean for each parameter}
 #'   \item{\code{median}}{list of posterior median for each parameter}
@@ -54,29 +54,29 @@
 #'
 #' @examples
 #'
-#' \dontrun{
-#' #---- use the data 'aids' from joineR package
-#' data("aids", package = "joineR")
+#' if(interactive()){
+#' #---- load data
+#' data(dataLong)
 #'
 #' #---- Fit quantile regression joint model for the first quartile
-#' qrjm_25 <- qrjm(formFixed = CD4 ~ obstime,
-#'                formRandom = ~ obstime,
-#'                formGroup = ~ id,
-#'                formSurv = Surv(time, death) ~ drug + gender + prevOI + AZT,
+#' qrjm_75 <- qrjm(formFixed = y ~ visit,
+#'                formRandom = ~ visit,
+#'                formGroup = ~ ID,
+#'                formSurv = Surv(time, event) ~ X1 + X2,
 #'                survMod = "weibull",
 #'                param = "value",
-#'                timeVar= "obstime",
-#'                data = aids,
-#'                tau = 0.25)
+#'                timeVar= "visit",
+#'                data = dataLong,
+#'                tau = 0.75)
 #'
 #' #---- Visualize the trace for beta parameters
-#' jagsUI::traceplot(qrjm_25$out_jagsUI, parameters = "beta")
+#' jagsUI::traceplot(qrjm_75$out_jagsUI, parameters = "beta")
 #'
-#' #---- Get the estimated coefficients : posterior means
-#' qrjm_25$mean
+#' #---- Get the estimated coefficients: posterior means
+#' qrjm_75$mean
 #'
 #' #---- Summary of output
-#' summary(qrjm_25)
+#' summary(qrjm_75)
 #' }
 #'
 qrjm <- function(formFixed,
@@ -92,7 +92,7 @@ qrjm <- function(formFixed,
                  n.chains = 3,
                  n.iter = 10000,
                  n.burnin = 5000,
-                 n.thin = 5,
+                 n.thin = 1,
                  n.adapt = 5000,
                  precision = 10,
                  C = 1000,
@@ -126,7 +126,7 @@ qrjm <- function(formFixed,
   if(!("id" %in% colnames(data_long)))
     data_long <- cbind(data_long, id = id)
   # use lqmm function to initiated values
-  cat("> Initialisation of longitudinal parameter values using 'lqmm' package. \n")
+  message("Initialisation of longitudinal parameter values using 'lqmm' package.")
   tmp_model <- lqmm::lqmm(fixed = formFixed,
                           random = formRandom,
                           group = id,
@@ -187,7 +187,7 @@ qrjm <- function(formFixed,
   mfZ <- stats::model.frame(formSurv, data = tmp)
   Z <- stats::model.matrix(formSurv, mfZ)
   # use survival::coxph function to initiated values
-  cat("> Initialisation of survival parameter values using 'survival' package. \n")
+  message("Initialisation of survival parameter values using 'survival' package.")
   tmp_model <- survival::coxph(formSurv,
                                data = tmp,
                                x = TRUE)
@@ -264,9 +264,6 @@ qrjm <- function(formFixed,
   }
 
   #---- Model for JAGS
-
-  #---- write jags model in .txt from R function
-  working.directory = getwd()
 
   # for weibull baseline hazard function and current value as shared association
   if(param=="value"){
@@ -375,8 +372,6 @@ alpha.assoc ~ dnorm(0, priorTau.alphaA)
   jags_code <- gsub("inprod(beta[1:ncX], Xs[K * (i - 1) + k, 1:ncX])", rplc, jags_code, fixed = TRUE)
   rplc <- paste(paste("b[i,", 1:jags.data$ncU, "] * Us[K * (i - 1) + k, ", 1:jags.data$ncU, "]", sep = ""), collapse = " + ")
   jags_code <- gsub("inprod(b[i, 1:ncU], Us[K * (i - 1) + k, 1:ncU])", rplc, jags_code, fixed = TRUE)
-  # write the model
-  writeLines(jags_code, file.path(working.directory,"JagsModel.txt"))
 
   }
 
@@ -475,10 +470,8 @@ alpha.assoc ~ dnorm(0, priorTau.alphaA)
   # regression on survival part for shared association in both hazard survival function
   rplc <- paste(paste("alpha.assoc[", 1:jags.data$ncU, "] * b[i,  ", 1:jags.data$ncU, "]", sep = ""), collapse = " + ")
   jags_code <- gsub("inprod(alpha.assoc[1:ncU], b[i, 1:ncU])", rplc, jags_code, fixed = TRUE)
-  # write the model
-  writeLines(jags_code, file.path(working.directory,"JagsModel.txt"))
 
-}
+  }
 
   # initialisation values
   if (n.chains == 3)
@@ -510,7 +503,7 @@ alpha.assoc ~ dnorm(0, priorTau.alphaA)
   # using jagsUI
   out_jags = jagsUI::jags(data = jags.data,
                           parameters.to.save = parms_to_save,
-                          model.file = "JagsModel.txt",
+                          model.file = textConnection(jags_code),
                           inits = inits,
                           n.chains = n.chains,
                           parallel = parallel,
@@ -519,8 +512,6 @@ alpha.assoc ~ dnorm(0, priorTau.alphaA)
                           n.burnin = n.burnin,
                           n.thin = n.thin,
                           DIC = F)
-
-  file.remove(file.path(working.directory, "JagsModel.txt"))
 
   #---- output building
 

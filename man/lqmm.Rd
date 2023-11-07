@@ -38,20 +38,20 @@ lqmm(
 
 \item{n.iter}{integer specifying the total number of iterations; default is 10000}
 
-\item{n.burnin}{integer specifying how many of n.iter to discard as burn-in ; default is 5000}
+\item{n.burnin}{integer specifying how many of \code{n.iter} to discard as burn-in ; default is 5000}
 
 \item{n.thin}{integer specifying the thinning of the chains; default is 1}
 
-\item{n.adapt}{integer specifying the number of iterations to use for adaptation; default is NULL}
+\item{n.adapt}{integer specifying the number of iterations to use for adaptation; default is \code{NULL}}
 
 \item{precision}{variance by default for vague prior distribution}
 
-\item{save_jagsUI}{If TRUE (by default), the output of jagsUI package is returned by the function. Warning, if TRUE, the output can be large.}
+\item{save_jagsUI}{If \code{TRUE} (by default), the output of \code{jagsUI} package is returned by the function. Warning, if \code{TRUE}, the output can be large.}
 
-\item{parallel}{see jagsUI::jags() function}
+\item{parallel}{see \code{jagsUI::jags()} function}
 }
 \value{
-A \code{BQt} object is a list with the following elements:
+A \code{Blqmm} object is a list with the following elements:
 \describe{
 \item{\code{mean}}{list of posterior mean for each parameter}
 \item{\code{median}}{list of posterior median for each parameter}
@@ -68,32 +68,32 @@ Moreover, this list also returns the MCMC draws, the Gelman and Rubin diagnostic
 }
 }
 \description{
-Function using JAGS to estimate the linear quantile mixed model assuming asymmetric Laplace
+Function using 'JAGS' software to estimate the linear quantile mixed model assuming asymmetric Laplace
 distribution for residual error.
 }
 \examples{
 
-\dontrun{
-#---- Orthodont data from lqmm package
-data("Orthodont", package = "lqmm")
+if(interactive()){
+#---- Use dataLong dataset
+data(dataLong)
 
 #---- Fit regression model for the first quartile
-lqmm_025 <- lqmm(formFixed = distance ~ age,
-                 formRandom = ~ age,
-                 formGroup = ~ Subject,
-                 data = Orthodont,
-                 tau = 0.25,
+lqmm_075 <- lqmm(formFixed = y ~ visit,
+                 formRandom = ~ visit,
+                 formGroup = ~ ID,
+                 data = dataLong,
+                 tau = 0.75,
                  n.iter = 10000,
                  n.burnin = 1000)
 
 #---- Get the posterior means
-lqmm_025$mean
+lqmm_075$mean
 
 #---- Visualize the trace for beta parameters
-jagsUI::traceplot(lqmm_025$out_jagsUI, parameters = "beta" )
+jagsUI::traceplot(lqmm_075$out_jagsUI, parameters = "beta")
 
 #---- Summary of output
-summary(lqmm_025)
+summary(lqmm_075)
 }
 
 }

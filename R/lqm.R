@@ -1,6 +1,6 @@
 #' \code{lqm} fits linear quantile regression model
 #'
-#' Function using JAGS to estimate the linear quantile regression model assuming asymmetric Laplace
+#' Function using 'JAGS' software to estimate the linear quantile regression model assuming asymmetric Laplace
 #' distribution for residual error.
 #'
 #' @param formula formula for the quantile regression including response variable
@@ -8,13 +8,13 @@
 #' @param tau the quantile(s) to be estimated. This must be a number between 0 and 1, otherwise the execution is stopped. If more than one quantile is specified, rounding off to the 4th decimal must give non–duplicated values of \code{tau}, otherwise the execution is stopped.
 #' @param n.chains the number of parallel chains for the model; default is 1.
 #' @param n.iter integer specifying the total number of iterations; default is 10000
-#' @param n.burnin integer specifying how many of n.iter to discard as burn-in ; default is 5000
+#' @param n.burnin integer specifying how many of \code{n.iter} to discard as burn-in ; default is 5000
 #' @param n.thin integer specifying the thinning of the chains; default is 1
-#' @param n.adapt integer specifying the number of iterations to use for adaptation; default is NULL
-#' @param save_jagsUI If TRUE (is TRUE by default), the output of jagsUI package is return by the function
-#' @param parallel see jagsUI::jags() function
+#' @param n.adapt integer specifying the number of iterations to use for adaptation; default is \code{NULL}
+#' @param save_jagsUI If \code{TRUE} (is \code{TRUE} by default), the output of \code{jagsUI} package is return by the function
+#' @param parallel see \code{jagsUI::jags()} function
 #'
-#' @return A \code{BQt} object which is a list with the following elements:
+#' @return A \code{Blqm} object which is a list with the following elements:
 #'    \describe{
 #'   \item{\code{mean}}{list of posterior mean for each parameter}
 #'   \item{\code{median}}{list of posterior median for each parameter}
@@ -38,7 +38,7 @@
 #'
 #' @examples
 #'
-#' \dontrun{
+#' if(interactive()){
 #' #---- Use data
 #' data(wave)
 #'
@@ -99,8 +99,6 @@ lqm <- function(formula,
                     )
 
   #---- write jags model in txt from R function
-  working.directory = getwd()
-
   jags_code <- "model{
   # constants
   c1 <- (1-2*tau)/(tau*(1-tau))
@@ -120,7 +118,13 @@ lqm <- function(formula,
 }"
   rplc <- paste(paste("beta[", 1:jags.data$ncX, "] * X[i, ", 1:jags.data$ncX, "]", sep = ""), collapse = " + ")
   jags_code <- gsub("inprod(beta[1:ncX], X[i, 1:ncX])", rplc, jags_code, fixed = TRUE)
-  writeLines(jags_code, file.path(working.directory,"JagsModel.txt"))
+
+  # # initial way: not allowed by CRAN policies
+  # working.directory = getwd()
+  # writeLines(jags_code, file.path(working.directory,"JagsModel.txt"))
+  # # alternative way 1: write to tempdir()
+  # writeLines(jags_code, file.path(tempdir(),"JagsModel.txt"))
+  # # alternative way 3: use directly textConnection()
 
   # posterior samples to save
   parms_to_save <- c("beta", "sigma", "va1")
@@ -128,7 +132,9 @@ lqm <- function(formula,
   # using jagsUI
   out_jags = jagsUI::jags(data = jags.data,
                           parameters.to.save = parms_to_save,
-                          model.file = "JagsModel.txt",
+                          # model.file = "JagsModel.txt",           # out1
+                          # model.file = file.path(tempdir(),"JagsModel.txt"), # out2
+                          model.file = textConnection(jags_code), # out3
                           n.chains = n.chains,
                           parallel = parallel,
                           n.adapt = n.adapt,
@@ -137,7 +143,7 @@ lqm <- function(formula,
                           n.thin = n.thin,
                           DIC = F)
 
-  file.remove(file.path(working.directory, "JagsModel.txt"))
+  # file.remove(file.path(working.directory, "JagsModel.txt"))
 
   #---- output
   out <- list(data = data)

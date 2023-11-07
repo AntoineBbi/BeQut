@@ -28,18 +28,18 @@ lqm(
 
 \item{n.iter}{integer specifying the total number of iterations; default is 10000}
 
-\item{n.burnin}{integer specifying how many of n.iter to discard as burn-in ; default is 5000}
+\item{n.burnin}{integer specifying how many of \code{n.iter} to discard as burn-in ; default is 5000}
 
 \item{n.thin}{integer specifying the thinning of the chains; default is 1}
 
-\item{n.adapt}{integer specifying the number of iterations to use for adaptation; default is NULL}
+\item{n.adapt}{integer specifying the number of iterations to use for adaptation; default is \code{NULL}}
 
-\item{save_jagsUI}{If TRUE (is TRUE by default), the output of jagsUI package is return by the function}
+\item{save_jagsUI}{If \code{TRUE} (is \code{TRUE} by default), the output of \code{jagsUI} package is return by the function}
 
-\item{parallel}{see jagsUI::jags() function}
+\item{parallel}{see \code{jagsUI::jags()} function}
 }
 \value{
-A \code{BQt} object which is a list with the following elements:
+A \code{Blqm} object which is a list with the following elements:
 \describe{
 \item{\code{mean}}{list of posterior mean for each parameter}
 \item{\code{median}}{list of posterior median for each parameter}
@@ -57,12 +57,12 @@ Moreover, this list also returns the MCMC draws, the Gelman and Rubin diagnostic
 }
 }
 \description{
-Function using JAGS to estimate the linear quantile regression model assuming asymmetric Laplace
+Function using 'JAGS' software to estimate the linear quantile regression model assuming asymmetric Laplace
 distribution for residual error.
 }
 \examples{
 
-\dontrun{
+if(interactive()){
 #---- Use data
 data(wave)
 

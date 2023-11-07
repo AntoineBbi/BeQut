@@ -1,6 +1,6 @@
 #' \code{lqmm} fits linear quantile mixed model
 #'
-#' Function using JAGS to estimate the linear quantile mixed model assuming asymmetric Laplace
+#' Function using 'JAGS' software to estimate the linear quantile mixed model assuming asymmetric Laplace
 #' distribution for residual error.
 #'
 #' @param formFixed formula for fixed part of longitudinal submodel with response variable
@@ -11,15 +11,15 @@
 #' @param RE_ind Boolean denoting if the random effects are assumed independent ; default is \code{FALSE}
 #' @param n.chains the number of parallel chains for the model; default is 1.
 #' @param n.iter integer specifying the total number of iterations; default is 10000
-#' @param n.burnin integer specifying how many of n.iter to discard as burn-in ; default is 5000
+#' @param n.burnin integer specifying how many of \code{n.iter} to discard as burn-in ; default is 5000
 #' @param n.thin integer specifying the thinning of the chains; default is 1
-#' @param n.adapt integer specifying the number of iterations to use for adaptation; default is NULL
+#' @param n.adapt integer specifying the number of iterations to use for adaptation; default is \code{NULL}
 #' @param precision variance by default for vague prior distribution
-#' @param save_jagsUI If TRUE (by default), the output of jagsUI package is returned by the function. Warning, if TRUE, the output can be large.
-#' @param parallel see jagsUI::jags() function
+#' @param save_jagsUI If \code{TRUE} (by default), the output of \code{jagsUI} package is returned by the function. Warning, if \code{TRUE}, the output can be large.
+#' @param parallel see \code{jagsUI::jags()} function
 #'
 #'
-#' @return A \code{BQt} object is a list with the following elements:
+#' @return A \code{Blqmm} object is a list with the following elements:
 #'  \describe{
 #'   \item{\code{mean}}{list of posterior mean for each parameter}
 #'   \item{\code{median}}{list of posterior median for each parameter}
@@ -35,7 +35,6 @@
 #'   Moreover, this list also returns the MCMC draws, the Gelman and Rubin diagnostics (see output of jagsUI objects)}
 #'  }
 #'
-#
 #' @author Antoine Barbieri
 #'
 #' @import lqmm jagsUI
@@ -48,27 +47,27 @@
 #'
 #' @examples
 #'
-#' \dontrun{
-#' #---- Orthodont data from lqmm package
-#' data("Orthodont", package = "lqmm")
+#' if(interactive()){
+#' #---- Use dataLong dataset
+#' data(dataLong)
 #'
 #' #---- Fit regression model for the first quartile
-#' lqmm_025 <- lqmm(formFixed = distance ~ age,
-#'                  formRandom = ~ age,
-#'                  formGroup = ~ Subject,
-#'                  data = Orthodont,
-#'                  tau = 0.25,
+#' lqmm_075 <- lqmm(formFixed = y ~ visit,
+#'                  formRandom = ~ visit,
+#'                  formGroup = ~ ID,
+#'                  data = dataLong,
+#'                  tau = 0.75,
 #'                  n.iter = 10000,
 #'                  n.burnin = 1000)
 #'
 #' #---- Get the posterior means
-#' lqmm_025$mean
+#' lqmm_075$mean
 #'
 #' #---- Visualize the trace for beta parameters
-#' jagsUI::traceplot(lqmm_025$out_jagsUI, parameters = "beta" )
+#' jagsUI::traceplot(lqmm_075$out_jagsUI, parameters = "beta")
 #'
 #' #---- Summary of output
-#' summary(lqmm_025)
+#' summary(lqmm_075)
 #' }
 #'
 lqmm <- function(formFixed,
@@ -100,7 +99,7 @@ lqmm <- function(formFixed,
   offset <- as.vector(c(1, 1 + cumsum(tapply(id, id, length))))
   I <- length(unique(id))
   # use lqmm function to initiated values
-  cat("Initiation of parameter values using lqmm package. \n")
+  message("Initiation of parameter values using lqmm package.")
   tmp_model <- lqmm::lqmm(fixed = formFixed,
                           random = formRandom,
                           group = id,
@@ -150,8 +149,6 @@ lqmm <- function(formFixed,
   }
 
   #---- write jags model in txt from R function
-  working.directory = getwd()
-
   if(RE_ind){
     jags_code <- "model{
   # constants
@@ -210,7 +207,6 @@ lqmm <- function(formFixed,
   # regression on random effects b
   rplc <- paste(paste("b[i, ", 1:jags.data$ncU, "] * U[j, ", 1:jags.data$ncU, "]", sep = ""), collapse = " + ")
   jags_code <- gsub("inprod(b[i, 1:ncU], U[j, 1:ncU])", rplc, jags_code, fixed = TRUE)
-  writeLines(jags_code, file.path(working.directory,"JagsModel.txt"))
 
   # initialisation values
   if(n.chains==3)
@@ -230,7 +226,7 @@ lqmm <- function(formFixed,
   #---- use JAGS sampler via jagsUI
   out_jags = jagsUI::jags(data = jags.data,
                           parameters.to.save = parms_to_save,
-                          model.file = "JagsModel.txt",
+                          model.file = textConnection(jags_code),
                           inits = inits,
                           n.chains = n.chains,
                           parallel = parallel,
@@ -239,8 +235,6 @@ lqmm <- function(formFixed,
                           n.burnin = n.burnin,
                           n.thin = n.thin,
                           DIC = F)
-
-  file.remove(file.path(working.directory, "JagsModel.txt"))
 
   #---- output
   out <- list(data = data)

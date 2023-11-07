@@ -15,29 +15,28 @@
 #'
 #' @author Antoine Barbieri and Baptiste Courrèges
 #'
-#' @import MASS
+#' @import MASS survival
 #'
 #' @examples
 #'
-#' \dontrun{
-#' data("aids", package = "joineR")
+#' if(interactive()){
+#' #---- load data
+#' data(dataLong)
 #'
-#' #---- Fit quantile regression joint model for the first quartile
-#' qrjmMedian <- qrjm(formFixed = CD4 ~ obstime,
-#'                    formRandom = ~ obstime,
-#'                    formGroup = ~ id,
-#'                    formSurv = Surv(time, death) ~ drug + gender + prevOI + AZT,
-#'                    survMod = "weibull",
-#'                    n.iter = 1000,
-#'                    n.burnin = 500,
-#'                    n.thin = 1,
-#'                    n.adapt = 500,
-#'                    param = "value",
-#'                    timeVar= "obstime", save_va = TRUE, parallel = TRUE,
-#'                    data = aids,
-#'                    tau = 0.5)
+#' #---- Fit quantile regression joint model for the median
+#' qrjm_50 <- qrjm(formFixed = y ~ visit,
+#'                formRandom = ~ visit,
+#'                formGroup = ~ ID,
+#'                formSurv = survival::Surv(time, event) ~ X1 + X2,
+#'                survMod = "weibull",
+#'                param = "value",
+#'                timeVar= "visit",
+#'                data = dataLong,
+#'                save_va = TRUE,
+#'                parallel = FALSE,
+#'                tau = 0.5)
 #'
-#' deviance(qrjmMedian, M=200)
+#' deviance(qrjm_50, M=200)
 #' }
 #'
 deviance <- function(object, M=1000, conditional="survival", verbose = TRUE){
