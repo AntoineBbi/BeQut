@@ -3,6 +3,7 @@
 S3method(summary,Blqm)
 S3method(summary,Blqmm)
 S3method(summary,Bqrjm)
+export(deviance)
 export(lqm)
 export(lqmm)
 export(qrjm)

@@ -16,6 +16,7 @@
 #' @author Antoine Barbieri and Baptiste Courrèges
 #'
 #' @import MASS survival
+#' @export
 #'
 #' @examples
 #'
