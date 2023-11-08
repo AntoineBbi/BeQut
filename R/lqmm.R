@@ -47,7 +47,7 @@
 #'
 #' @examples
 #'
-#' if(interactive()){
+#' \donttest{
 #' #---- Use dataLong dataset
 #' data(dataLong)
 #'

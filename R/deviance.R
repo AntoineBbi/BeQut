@@ -20,7 +20,7 @@
 #'
 #' @examples
 #'
-#' if(interactive()){
+#' \donttest{
 #' #---- load data
 #' data(dataLong)
 #'

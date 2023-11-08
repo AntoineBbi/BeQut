@@ -29,7 +29,7 @@ An object which is a list with the following elements:
 }
 \examples{
 
-if(interactive()){
+\donttest{
 #---- load data
 data(dataLong)
 

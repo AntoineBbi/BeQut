@@ -91,7 +91,7 @@ Joint modeling concerns longitudinal data and time-to-event
 }
 \examples{
 
-if(interactive()){
+\donttest{
 #---- load data
 data(dataLong)
 

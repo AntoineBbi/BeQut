@@ -62,7 +62,7 @@ distribution for residual error.
 }
 \examples{
 
-if(interactive()){
+\donttest{
 #---- Use data
 data(wave)
 
