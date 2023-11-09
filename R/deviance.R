@@ -186,7 +186,7 @@ deviance <- function(object, M=1000, conditional="survival", verbose = TRUE){
   }
 
   if (verbose == TRUE)
-    cat("\n")
+    message("\n")
 
   # output management
   sims.list <- list(b = b,
