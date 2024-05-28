@@ -356,7 +356,7 @@ lqmm <- function(formFixed,
   if(RE_ind){
     out$CIs$covariance.b <- cbind(as.vector(t(out_jags$q2.5$covariance.b)),
                                   as.vector(t(out_jags$q97.5$covariance.b)))
-    rownames(out$CIs$covariance.b) <- colnames(X)
+    rownames(out$CIs$covariance.b) <- colnames(U)
     colnames(out$CIs$covariance.b) <- c("2.5%", "97.5%")
   }else{
     out$CIs$covariance.b <- cbind(as.vector(diag(out_jags$q2.5$covariance.b)),

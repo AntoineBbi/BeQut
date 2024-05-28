@@ -6,7 +6,7 @@
 \alias{BeQut-package}
 \title{BeQut: Bayesian Estimation for Quantile Regression Mixed Models}
 \description{
-Using a Bayesian estimation procedure, this package fits linear quantile regression models such as linear quantile models, linear quantile mixed models, quantile regression joint models for time-to-event and longitudinal data. The estimation procedure is based on the asymmetric Laplace distribution and the 'JAGS' software is used to get posterior sample (Yang, Luo, DeSantis (2019) \doi{10.1177/0962280218784757}).
+Using a Bayesian estimation procedure, this package fits linear quantile regression models such as linear quantile models, linear quantile mixed models, quantile regression joint models for time-to-event and longitudinal data. The estimation procedure is based on the asymmetric Laplace distribution and the 'JAGS' software is used to get posterior samples (Yang, Luo, DeSantis (2019) \doi{10.1177/0962280218784757}).
 }
 \author{
 \strong{Maintainer}: Antoine Barbieri \email{antoine.barbieri@u-bordeaux.fr}
