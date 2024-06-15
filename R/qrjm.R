@@ -102,10 +102,9 @@ qrjm <- function(formFixed,
 
   # #
   # #   -- To do
-  # #   verify with value.IG
-  # #   add a stopping convergence criteria
-  # #   initialize the values of parameter chains and to fix the intercept to test the convergence of beta's parameter.
-  # #
+  # #   if save_va = TRUE, parallel = TRUE does work: need to fix that!
+  # #   initialize the values of parameter chains using BeQut::lqmm
+  # #   Fix error when no covariate is taken into account in survival predictor
   #
 
   #-- data management

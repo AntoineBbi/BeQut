@@ -98,7 +98,11 @@ lslqmm <- function(formFixed,
   # iniitalisation parameters using BeQut
 
   #-- data management
-  data_long <- data[unique(c(all.vars(formGroup),all.vars(formFixed),all.vars(formRandom)))]
+  data_long <- data[unique(c(all.vars(formGroup),
+                             all.vars(formFixed),
+                             all.vars(formRandom),
+                             all.vars(formFixedScale),
+                             all.vars(formRandomScale)))]
   y <- data_long[all.vars(formFixed)][, 1]
   mfX <- stats::model.frame(formFixed, data = data_long)
   X1 <- stats::model.matrix(formFixed, mfX)
@@ -108,6 +112,10 @@ lslqmm <- function(formFixed,
   X2 <- stats::model.matrix(formFixedScale, mfX)
   mfZ <- stats::model.frame(formRandomScale, data = data_long)
   Z2 <- stats::model.matrix(formRandomScale, mfZ)
+  ncX1 <- ncol(X1)
+  ncZ1 <- ncol(Z1)
+  ncX2 <- ncol(X2)
+  ncZ2 <- ncol(Z2)
   id <- as.integer(data_long[all.vars(formGroup)][,1])
   if(!("id" %in% colnames(data_long)))
     data_long <- cbind(data_long, id = id)
@@ -122,15 +130,15 @@ lslqmm <- function(formFixed,
                           data = data_long)
   # prior beta parameters
   priorMean.beta <- lqmm::coef.lqmm(tmp_model)
-  priorTau.beta <- diag(rep(1/precision, length(priorMean.beta)))
+  priorTau.beta <- if(ncX1==1) c(1/precision) else diag(rep(1/precision, length(priorMean.beta)))
   # prior xi parameters
   ncX2 <- ncol(X2)
-  priorMean.xi <- if(ncX2==1) tmp_model$scale else c(log(tmp_model$scale), rep(0, ncX2-1))
-  priorTau.xi <- diag(rep(1/10, length(priorMean.beta)))
+  priorMean.xi <- if(ncX2==1) c(log(tmp_model$scale)) else c(log(tmp_model$scale), rep(0, ncX2-1))
+  priorTau.xi <- if(ncX2==1) c(1/precision) else diag(rep(1/10, length(priorMean.xi)))
 
   bis <- as.matrix(lqmm::ranef(tmp_model))
   bis[abs(bis)<.0001] <- 0
-  uis <- matrix(0, ncol = ncX2, nrow = I)
+  uis <- matrix(0, ncol = ncZ2, nrow = I)
   initial.values <- list(b = bis,
                          u = uis,
                          beta = priorMean.beta,
@@ -143,19 +151,19 @@ lslqmm <- function(formFixed,
                     X2 = X2,
                     Z2 = Z2,
                     tau = tau,
-                    ncX1 = ncol(X1),
-                    ncZ1 = ncol(Z1),
-                    ncX2 = ncol(X2),
-                    ncZ2 = ncol(Z2),
+                    ncX1 = ncX1,
+                    ncX2 = ncX2,
+                    ncZ1 = ncZ1,
+                    ncZ2 = ncZ2,
                     I = I,
                     offset = offset,
                     priorMean.beta = priorMean.beta,
-                    priorTau.beta = priorTau.beta,
+                    priorTau.beta = as.matrix(priorTau.beta),
                     priorMean.xi = priorMean.xi,
-                    priorTau.xi = priorTau.xi
-  )
+                    priorTau.xi = as.matrix(priorTau.xi)
+                    )
 
-  if(jags.data$ncZ1==1 && jags.data$ncZ2==1){
+  if(ncZ1==1 && ncZ2==1){
     # update jags.data list
     jags.data <- c(jags.data,
                    list(priorA.b = 1/precision,
@@ -193,24 +201,28 @@ lslqmm <- function(formFixed,
   covariance.b <- 1/prec.Sigma_b
   prec.Sigma_u ~ dgamma(priorA.u, priorB.u)
   covariance.u <- 1/prec.Sigma_u
-  beta[1:ncX1] ~ dmnorm(priorMean.beta[], priorTau.beta[, ])
-  xi[1:ncX2] ~ dmnorm(priorMean.xi[], priorTau.xi[, ])
+  for(p1 in 1:ncX1){
+    beta[p1] ~ dnorm(priorMean.beta[p1], priorTau.beta[p1, p1])
+  }
+  for(p2 in 1:ncX2){
+    xi[p2] ~ dnorm(priorMean.xi[p2], priorTau.xi[p2, p2])
+  }
 }"
   }
-  if(jags.data$ncZ1==1 && jags.data$ncZ2>1){
+  if(ncZ1==1 && ncZ2>1){
     # update jags.data list
     jags.data <- c(jags.data,
                    list(priorA.b = 1/precision,
                         priorB.b = 1/precision,
                         mu_b = 0,
-                        priorA.u = diag(rep(1/precision, ncol(Z2))),
-                        priorB.u = ncol(Z2),
-                        mu_u = rep(0, ncol(Z2))
+                        priorA.u = diag(rep(1/precision, ncZ2)),
+                        priorB.u = ncZ2,
+                        mu_u = rep(0, ncZ2)
                    )
     )
     # update initialisation values
     initial.values$prec.Sigma_b <- 1/lqmm::VarCorr(tmp_model)
-    initial.values$prec.Sigma_u <- diag(1/precision, ncol(Z2))
+    initial.values$prec.Sigma_u <- diag(1/precision, ncZ2)
     # define the appropriate BUGS model
     jags_code <- "model{
   # constants
@@ -239,15 +251,15 @@ lslqmm <- function(formFixed,
   xi[1:ncX2] ~ dmnorm(priorMean.xi[], priorTau.xi[, ])
 }"
   }
-  if(jags.data$ncZ1>1 && jags.data$ncZ2==1){
+  if(ncZ1>1 && ncZ2==1){
     # update jags.data list
     jags.data <- c(jags.data,
                    list(priorA.u = 1/precision,
                         priorB.u = 1/precision,
                         mu_u = 0,
-                        priorA.b = diag(rep(1/precision, ncol(Z1))),
-                        priorB.b = ncol(Z1),
-                        mu_b = rep(0, ncol(Z1))
+                        priorA.b = diag(rep(1/precision, ncZ1)),
+                        priorB.b = ncZ1,
+                        mu_b = rep(0, ncZ1)
                         )
                    )
     # update initialisation values
@@ -281,15 +293,15 @@ lslqmm <- function(formFixed,
   xi[1:ncX2] ~ dmnorm(priorMean.xi[], priorTau.xi[, ])
 }"
     }
-  if(jags.data$ncZ1>1 && jags.data$ncZ2>1){
+  if(ncZ1>1 && ncZ2>1){
     # update jags.data list
     jags.data <- c(jags.data,
-                   list(priorA.b = diag(rep(1/precision, ncol(Z1))),
-                        priorB.b = ncol(Z1),
-                        mu_b = rep(0, ncol(Z1)),
-                        priorA.u = diag(rep(1/precision, ncol(Z2))),
-                        priorB.u = ncol(Z2),
-                        mu_u = rep(0, ncol(Z2))
+                   list(priorA.b = diag(rep(1/precision, ncZ1)),
+                        priorB.b = ncZ1,
+                        mu_b = rep(0, ncZ1),
+                        priorA.u = diag(rep(1/precision, ncZ2)),
+                        priorB.u = ncZ2,
+                        mu_u = rep(0, ncZ2)
                         )
                    )
     # update initialisation values
@@ -337,6 +349,11 @@ lslqmm <- function(formFixed,
   # regression on random effects b
   rplc <- paste(paste("u[i, ", 1:jags.data$ncZ2, "] * Z2[j, ", 1:jags.data$ncZ2, "]", sep = ""), collapse = " + ")
   jags_code <- gsub("inprod(u[i, 1:ncZ2], Z2[j, 1:ncZ2])", rplc, jags_code, fixed = TRUE)
+
+  if(ncZ1==1)
+    jags.data$ncZ1 <- NULL
+  if(ncZ2==1)
+    jags.data$ncZ2 <- NULL
 
   # initialisation values
   if(n.chains==3)
@@ -471,7 +488,7 @@ lslqmm <- function(formFixed,
     names(out$Rhat$xi) <-
     names(out$StDev$xi) <- colnames(X2)
 
-  if(ncol(Z1)==1){
+  if(ncZ1==1){
     names(out$mean$covariance.b) <-
       names(out$median$covariance.b) <-
       names(out$modes$covariance.b) <-
@@ -493,7 +510,7 @@ lslqmm <- function(formFixed,
       rownames(out$StDev$covariance.b) <- colnames(Z1)
   }
 
-  if(ncol(Z2)==1){
+  if(ncZ2==1){
     names(out$mean$covariance.u) <-
       names(out$median$covariance.u) <-
       names(out$modes$covariance.u) <-
@@ -526,11 +543,11 @@ lslqmm <- function(formFixed,
   ## xi parameters
   out$CIs$xi <- cbind(as.vector(t(out_jags$q2.5$xi)),
                         as.vector(t(out_jags$q97.5$xi)))
-  rownames(out$CIs$xi) <- colnames(X1)
+  rownames(out$CIs$xi) <- colnames(X2)
   colnames(out$CIs$xi) <- c("2.5%", "97.5%")
 
   # only for diagonal elements of covariance matrix of random effects
-  if(ncol(Z1)==1){
+  if(ncZ1==1){
     out$CIs$covariance.b <- cbind(as.vector(t(out_jags$q2.5$covariance.b)),
                                   as.vector(t(out_jags$q97.5$covariance.b)))
     rownames(out$CIs$covariance.b) <- colnames(Z1)
@@ -541,7 +558,7 @@ lslqmm <- function(formFixed,
     rownames(out$CIs$covariance.b) <- colnames(Z1)
     colnames(out$CIs$covariance.b) <- c("2.5%", "97.5%")
   }
-  if(ncol(Z2)==1){
+  if(ncZ2==1){
     out$CIs$covariance.u <- cbind(as.vector(t(out_jags$q2.5$covariance.u)),
                                   as.vector(t(out_jags$q97.5$covariance.u)))
     rownames(out$CIs$covariance.u) <- colnames(Z2)
