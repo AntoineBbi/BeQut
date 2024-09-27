@@ -15,7 +15,8 @@
 #' @param n.burnin integer specifying how many of \code{n.iter} to discard as burn-in ; default is 5000
 #' @param n.thin integer specifying the thinning of the chains; default is 1
 #' @param n.adapt integer specifying the number of iterations to use for adaptation; default is \code{NULL}
-#' @param precision variance by default for vague prior distribution
+#' @param object_lqmm Object returns by 'lqmm' function of BeQuT package to initialize parameter chains, default is \code{NULL}
+#' @param precision precision (e.g. inverse of variance) of prior distributions, default is 0.1
 #' @param save_jagsUI If \code{TRUE} (by default), the output of \code{jagsUI} package is returned by the function. Warning, if \code{TRUE}, the output can be large.
 #' @param parallel see \code{jagsUI::jags()} function
 #'
@@ -38,7 +39,7 @@
 #'
 #' @author Antoine Barbieri
 #'
-#' @import lqmm jagsUI
+#' @import jagsUI
 #'
 #' @references Courcoul L, Tzourio C, Woodward M, Barbieri A, Jacqmin-Gadda H (2024).
 #' \emph{	A location-scale joint model for studying the link between the time-dependent subject-specific variability of blood pressure and competing events}.
@@ -88,14 +89,14 @@ lslqmm <- function(formFixed,
                    n.burnin = 5000,
                    n.thin = 1,
                    n.adapt = NULL,
-                   precision = 10,
+                   object_lqmm = NULL,
+                   precision = 0.1,
                    save_jagsUI = TRUE,
                    parallel = FALSE){
 
 
   #-- To do list
   # change the example
-  # iniitalisation parameters using BeQut
 
   #-- data management
   data_long <- data[unique(c(all.vars(formGroup),
@@ -121,28 +122,33 @@ lslqmm <- function(formFixed,
     data_long <- cbind(data_long, id = id)
   offset <- as.vector(c(1, 1 + cumsum(tapply(id, id, length))))
   I <- length(unique(id))
-  # use lqmm function to initiated values
-  message("Initiation of parameter values using lqmm package.")
-  tmp_model <- lqmm::lqmm(fixed = formFixed,
-                          random = formRandom,
-                          group = id,
-                          tau = tau,
-                          data = data_long)
-  # prior beta parameters
-  priorMean.beta <- lqmm::coef.lqmm(tmp_model)
-  priorTau.beta <- if(ncX1==1) c(1/precision) else diag(rep(1/precision, length(priorMean.beta)))
-  # prior xi parameters
-  ncX2 <- ncol(X2)
-  priorMean.xi <- if(ncX2==1) c(log(tmp_model$scale)) else c(log(tmp_model$scale), rep(0, ncX2-1))
-  priorTau.xi <- if(ncX2==1) c(1/precision) else diag(rep(1/10, length(priorMean.xi)))
 
-  bis <- as.matrix(lqmm::ranef(tmp_model))
-  bis[abs(bis)<.0001] <- 0
-  uis <- matrix(0, ncol = ncZ2, nrow = I)
-  initial.values <- list(b = bis,
-                         u = uis,
+  # Initialization of prior parameter
+  if(!is.null(object_lqmm) && formFixed!=object_lqmm$control$formFixed)
+    stop("The 'formFixed' formula does not match the one from 'object_lqmm'.")
+  if(!is.null(object_lqmm) && formFixed==object_lqmm$control$formFixed){
+    # prior beta parameters
+    priorMean.beta <- as.vector(object_lqmm$mean$beta)
+    priorTau.beta <- if(ncX1==1) c(precision) else diag(rep((1/object_lqmm$StDev$beta^2)*precision, length(priorMean.beta)))
+    # prior xi parameters
+    priorMean.xi <- if(ncX2==1) c(log(object_lqmm$mean$sigma)) else c(log(object_lqmm$mean$sigma), rep(0, ncX2-1))
+    priorTau.xi <- if(ncX2==1) c(1/sd(log(object_lqmm$sims.list$sigma))*precision) else diag(c(1/sd(log(object_lqmm$sims.list$sigma))*precision,
+                                                                                               rep(precision, length(priorMean.xi))))
+    # priorTau.xi <- if(ncX2==1) c(precision) else diag(rep(precision, length(priorMean.xi)))
+  }else{
+    # prior beta parameters
+    priorMean.beta <- rep(0, ncX1)
+    priorTau.beta <- diag(rep(precision, length(priorMean.beta)))
+    # prior xi parameters
+    priorMean.xi <- rep(0, ncX2)
+    priorTau.xi <- if(ncX2==1) c(precision) else diag(rep(precision, length(priorMean.xi)))
+  }
+  # initialization of chains
+  initial.values <- list(b = if(is.null(object_lqmm)) matrix(0, ncol = ncZ1, nrow = I) else object_lqmm$random_effect$postMeans,
+                         u = matrix(0, ncol = ncZ2, nrow = I),
                          beta = priorMean.beta,
-                         xi = priorMean.xi)
+                         xi = priorMean.xi
+  )
 
   # list of data jags
   jags.data <- list(y = y,
@@ -166,17 +172,17 @@ lslqmm <- function(formFixed,
   if(ncZ1==1 && ncZ2==1){
     # update jags.data list
     jags.data <- c(jags.data,
-                   list(priorA.b = 1/precision,
-                        priorB.b = 1/precision,
+                   list(priorA.b = precision,
+                        priorB.b = precision,
                         mu_b = 0,
-                        priorA.u = 1/precision,
-                        priorB.u = 1/precision,
+                        priorA.u = precision,
+                        priorB.u = precision,
                         mu_u = 0
                    )
     )
     # update initialisation values
-    initial.values$prec.Sigma_b <- 1/lqmm::VarCorr(tmp_model)
-    initial.values$prec.Sigma_u <- 1/precision
+    initial.values$prec.Sigma_b <- 1/object_lqmm$mean$covariance.b
+    initial.values$prec.Sigma_u <- precision
     # define the appropriate BUGS model
     jags_code <- "model{
   # constants
@@ -212,17 +218,17 @@ lslqmm <- function(formFixed,
   if(ncZ1==1 && ncZ2>1){
     # update jags.data list
     jags.data <- c(jags.data,
-                   list(priorA.b = 1/precision,
-                        priorB.b = 1/precision,
+                   list(priorA.b = precision,
+                        priorB.b = precision,
                         mu_b = 0,
-                        priorA.u = diag(rep(1/precision, ncZ2)),
+                        priorA.u = diag(rep(precision, ncZ2)),
                         priorB.u = ncZ2,
                         mu_u = rep(0, ncZ2)
                    )
     )
     # update initialisation values
-    initial.values$prec.Sigma_b <- 1/lqmm::VarCorr(tmp_model)
-    initial.values$prec.Sigma_u <- diag(1/precision, ncZ2)
+    initial.values$prec.Sigma_b <- 1/object_lqmm$mean$covariance.b
+    initial.values$prec.Sigma_u <- diag(precision, ncZ2)
     # define the appropriate BUGS model
     jags_code <- "model{
   # constants
@@ -254,17 +260,17 @@ lslqmm <- function(formFixed,
   if(ncZ1>1 && ncZ2==1){
     # update jags.data list
     jags.data <- c(jags.data,
-                   list(priorA.u = 1/precision,
-                        priorB.u = 1/precision,
+                   list(priorA.u = precision,
+                        priorB.u = precision,
                         mu_u = 0,
-                        priorA.b = diag(rep(1/precision, ncZ1)),
+                        priorA.b = diag(rep(precision, ncZ1)),
                         priorB.b = ncZ1,
                         mu_b = rep(0, ncZ1)
-                        )
                    )
+    )
     # update initialisation values
-    initial.values$prec.Sigma_b <- diag(1/lqmm::VarCorr(tmp_model))
-    initial.values$prec.Sigma_u <- 1/precision
+    initial.values$prec.Sigma_b <- solve(object_lqmm$mean$covariance.b)
+    initial.values$prec.Sigma_u <- precision
     # define the appropriate BUGS model
     jags_code <- "model{
   # constants
@@ -292,21 +298,21 @@ lslqmm <- function(formFixed,
   beta[1:ncX1] ~ dmnorm(priorMean.beta[], priorTau.beta[, ])
   xi[1:ncX2] ~ dmnorm(priorMean.xi[], priorTau.xi[, ])
 }"
-    }
+  }
   if(ncZ1>1 && ncZ2>1){
     # update jags.data list
     jags.data <- c(jags.data,
-                   list(priorA.b = diag(rep(1/precision, ncZ1)),
+                   list(priorA.b = diag(rep(precision, ncZ1)),
                         priorB.b = ncZ1,
                         mu_b = rep(0, ncZ1),
-                        priorA.u = diag(rep(1/precision, ncZ2)),
+                        priorA.u = diag(rep(precision, ncZ2)),
                         priorB.u = ncZ2,
                         mu_u = rep(0, ncZ2)
-                        )
                    )
+    )
     # update initialisation values
-    initial.values$prec.Sigma_b <- diag(1/lqmm::VarCorr(tmp_model))
-    initial.values$prec.Sigma_u <- diag(1/precision, ncol(Z2))
+    initial.values$prec.Sigma_b <- solve(object_lqmm$mean$covariance.b)
+    initial.values$prec.Sigma_u <- diag(precision, ncol(Z2))
     # define the appropriate BUGS model
     jags_code <- "model{
   # constants
@@ -542,7 +548,7 @@ lslqmm <- function(formFixed,
 
   ## xi parameters
   out$CIs$xi <- cbind(as.vector(t(out_jags$q2.5$xi)),
-                        as.vector(t(out_jags$q97.5$xi)))
+                      as.vector(t(out_jags$q97.5$xi)))
   rownames(out$CIs$xi) <- colnames(X2)
   colnames(out$CIs$xi) <- c("2.5%", "97.5%")
 

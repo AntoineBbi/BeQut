@@ -19,7 +19,8 @@
 #' @param n.burnin integer specifying how many of \code{n.iter} to discard as burn-in ; default is 5000
 #' @param n.thin integer specifying the thinning of the chains; default is 1
 #' @param n.adapt integer specifying the number of iterations to use for adaptation; default is 5000
-#' @param precision variance by default for vague prior distribution
+#' @param object_lqmm Object returns by 'lqmm' function of BeQuT package to initialize parameter chains, default is \code{NULL}
+#' @param precision precision (e.g. inverse of variance) of prior distributions, default is 0.1
 #' @param C value used in the zero trick; default is 1000.
 #' @param save_va If \code{TRUE} (is \code{FALSE} by default), the draws of auxiliary variable W is returned by the function
 #' @param save_jagsUI If \code{TRUE} (by default), the output of \code{jagsUI} package is returned by the function
@@ -44,7 +45,7 @@
 #'
 #' @author Antoine Barbieri
 #'
-#' @import jagsUI lqmm survival
+#' @import jagsUI survival
 #'
 #' @export
 #'
@@ -94,7 +95,8 @@ qrjm <- function(formFixed,
                  n.burnin = 5000,
                  n.thin = 1,
                  n.adapt = 5000,
-                 precision = 10,
+                 object_lqmm = NULL,
+                 precision = 0.1,
                  C = 1000,
                  save_jagsUI = TRUE,
                  save_va = FALSE,
@@ -103,7 +105,6 @@ qrjm <- function(formFixed,
   # #
   # #   -- To do
   # #   if save_va = TRUE, parallel = TRUE does work: need to fix that!
-  # #   initialize the values of parameter chains using BeQut::lqmm
   # #   Fix error when no covariate is taken into account in survival predictor
   #
 
@@ -124,22 +125,27 @@ qrjm <- function(formFixed,
   I <- length(unique(id))
   if(!("id" %in% colnames(data_long)))
     data_long <- cbind(data_long, id = id)
-  # use lqmm function to initiated values
-  message("Initialisation of longitudinal parameter values using 'lqmm' package.")
-  tmp_model <- lqmm::lqmm(fixed = formFixed,
-                          random = formRandom,
-                          group = id,
-                          tau = tau,
-                          data = data_long)
+  if(is.null(object_lqmm)){
+  # use lqmm function to initialize values
+  message("Initialisation of longitudinal parameter values using 'lqmm' function with:\n
+          3 chains, 1500 iterations including 500 for burn-in phase.")
+    object_lqmm <- BeQut::lqmm(fixed = formFixed,
+                               random = formRandom,
+                               group = id,
+                               tau = tau,
+                               data = data_long,
+                               n.chains = 3,
+                               n.iter = 1500,
+                               n.burnin = 500,
+                               n.thin = 1)
+  }
   # prior beta parameters
-  priorMean.beta <- coef.lqmm(tmp_model)
-  priorTau.beta <- diag(rep(1/10,length(priorMean.beta)))
-
-  bis <- as.matrix(lqmm::ranef(tmp_model))
-  bis[abs(bis)<.0001] <- 0
-  initial.values <- list(b = bis,
+  priorMean.beta <- as.vector(object_lqmm$mean$beta)
+  priorTau.beta <- if(ncX1==1) c(precision) else diag(rep((1/object_lqmm$StDev$beta^2)*precision, length(priorMean.beta)))
+  # initialization of chains
+  initial.values <- list(b = object_lqmm$random_effect$postMeans,
                          beta = priorMean.beta,
-                         sigma = tmp_model$scale)
+                         sigma = object_lqmm$mean$sigma)
 
   # list of data jags
   jags.data <- list(y = y,
@@ -152,27 +158,27 @@ qrjm <- function(formFixed,
                     offset = offset,
                     priorMean.beta = priorMean.beta,
                     priorTau.beta = priorTau.beta,
-                    priorA.sigma = 1/precision,
-                    priorB.sigma = 1/precision
+                    priorA.sigma = precision,
+                    priorB.sigma = precision
                     )
 
   if(jags.data$ncU==1)
     RE_ind <- TRUE
   if(RE_ind){
     jags.data <- c(jags.data,
-                   list(priorA.Sigma2 = 1/precision,
-                        priorB.Sigma2 = 1/precision
+                   list(priorA.Sigma2 = precision,
+                        priorB.Sigma2 = precision
                    )
     )
-    initial.values$prec.Sigma2 <- 1/VarCorr(tmp_model)
+    initial.values$prec.Sigma2 <- diag(solve(object_lqmm$mean$covariance.b))
   }else{
     jags.data <- c(jags.data,
-                   list(priorR.Sigma2 = diag(rep(1/precision, ncol(U))),
+                   list(priorR.Sigma2 = diag(rep(precision, ncol(U))),
                         priorK.Sigma2 = ncol(U),
                         mu0 = rep(0, ncol(U))
                    )
     )
-    initial.values$prec.Sigma2 <- diag(1/lqmm::VarCorr(tmp_model))
+    initial.values$prec.Sigma2 <- solve(object_lqmm$mean$covariance.b)
   }
 
   #--- survival part
@@ -192,7 +198,7 @@ qrjm <- function(formFixed,
                                x = TRUE)
   # Complete the jags data
   priorMean.alpha <- c(0, tmp_model$coefficients)
-  priorTau.alpha <- diag(c(1/precision, 1/(precision*diag(tmp_model$var))))
+  priorTau.alpha <- diag(c(precision, precision/(diag(tmp_model$var))))
   jags.data <- c(jags.data,
                  list(C = C,
                       zeros = numeric(nTime),
@@ -202,7 +208,7 @@ qrjm <- function(formFixed,
                       ncZ = ncol(Z),
                       priorMean.alpha = priorMean.alpha,
                       priorTau.alpha = priorTau.alpha,
-                      priorTau.alphaA = 1/precision)
+                      priorTau.alphaA = precision)
                  )
   # initialisation values of survival parameters
   initial.values$alpha <- c(0, tmp_model$coefficients)
@@ -493,8 +499,8 @@ alpha.assoc ~ dnorm(0, priorTau.alphaA)
     jags.data <-
       c(jags.data,
         list(
-          priorA.shape = 1 / precision,
-          priorB.shape = 1 / precision
+          priorA.shape = precision,
+          priorB.shape = precision
        ))
     parms_to_save <- c(parms_to_save, "shape")
   }

@@ -14,7 +14,8 @@
 #' @param n.burnin integer specifying how many of \code{n.iter} to discard as burn-in ; default is 5000
 #' @param n.thin integer specifying the thinning of the chains; default is 1
 #' @param n.adapt integer specifying the number of iterations to use for adaptation; default is \code{NULL}
-#' @param precision variance by default for vague prior distribution
+#' @param object_lqm Object returns by 'lqm' function of BeQuT package to initialize parameter chains, default is \code{NULL}
+#' @param precision precision (inverse of variance) of prior distribution, default is 0.1
 #' @param save_jagsUI If \code{TRUE} (by default), the output of \code{jagsUI} package is returned by the function. Warning, if \code{TRUE}, the output can be large.
 #' @param parallel see \code{jagsUI::jags()} function
 #'
@@ -37,7 +38,7 @@
 #'
 #' @author Antoine Barbieri
 #'
-#' @import lqmm jagsUI
+#' @import jagsUI
 #'
 #' @references Marco Geraci and Matteo Bottai (2014).
 #' \emph{Linear quantile mixed models}.
@@ -71,19 +72,20 @@
 #' }
 #'
 lqmm <- function(formFixed,
-                 formRandom,
-                 formGroup,
-                 data,
-                 tau,
-                 RE_ind = FALSE,
-                 n.chains = 3,
-                 n.iter = 10000,
-                 n.burnin = 5000,
-                 n.thin = 1,
-                 n.adapt = NULL,
-                 precision = 10,
-                 save_jagsUI = TRUE,
-                 parallel = FALSE){
+                  formRandom,
+                  formGroup,
+                  data,
+                  tau,
+                  RE_ind = FALSE,
+                  n.chains = 3,
+                  n.iter = 10000,
+                  n.burnin = 5000,
+                  n.thin = 1,
+                  n.adapt = NULL,
+                  object_lqm = NULL,
+                  precision = 0.1,
+                  save_jagsUI = TRUE,
+                  parallel = FALSE){
 
 
   #-- data management
@@ -98,22 +100,38 @@ lqmm <- function(formFixed,
     data_long <- cbind(data_long, id = id)
   offset <- as.vector(c(1, 1 + cumsum(tapply(id, id, length))))
   I <- length(unique(id))
-  # use lqmm function to initiated values
-  message("Initiation of parameter values using lqmm package.")
-  tmp_model <- lqmm::lqmm(fixed = formFixed,
-                          random = formRandom,
-                          group = id,
-                          tau = tau,
-                          data = data_long)
-  # prior beta parameters
-  priorMean.beta <- coef.lqmm(tmp_model)
-  priorTau.beta <- diag(rep(1/10,length(priorMean.beta)))
-
-  bis <- as.matrix(lqmm::ranef(tmp_model))
-  bis[abs(bis)<.0001] <- 0
-  initial.values <- list(b = bis,
+  # Initialization of prior parameter
+  if(!is.null(object_lqm) && formFixed!=object_lqm$control$formula)
+    stop("The 'formFixed' formula does not match the one from 'object_lqm'.")
+  if(!is.null(object_lqm) && formFixed==object_lqm$control$formula){
+    priorMean.beta <- object_lqm$mean$beta
+    priorTau.beta <- diag(rep(precision, length(priorMean.beta)))
+  }else{
+    priorMean.beta <- rep(0, ncol(X))
+    priorTau.beta <- diag(rep(precision, length(priorMean.beta)))
+  }
+  # initialization of chains
+  initial.values <- list(b = matrix(0, ncol = ncol(U), nrow = I),
                          beta = priorMean.beta,
-                         sigma = tmp_model$scale)
+                         sigma = ifelse(test = is.null(object_lqm),
+                                        yes =  1,
+                                        no = object_lqm$mean$sigma) #lqmm sigma = tmp_model$scale
+  )
+
+  # #old version #lqmm
+  # message("Initiation of parameter values using lqmm package.")
+  # tmp_model <- lqmm::lqmm(fixed = formFixed,
+  #                         random = formRandom,
+  #                         group = id,
+  #                         tau = tau,
+  #                         data = data_long)
+  # # prior beta parameters
+  # priorMean.beta <- coef.lqmm(tmp_model)
+  # bis <- as.matrix(lqmm::ranef(tmp_model))
+  # bis[abs(bis)<.0001] <- 0
+  # initial.values <- list(b = bis,
+  #                        beta = priorMean.beta,
+  #                        sigma = tmp_model$scale)
 
   # list of data jags
   jags.data <- list(y = y,
@@ -126,26 +144,28 @@ lqmm <- function(formFixed,
                     offset = offset,
                     priorMean.beta = priorMean.beta,
                     priorTau.beta = priorTau.beta,
-                    priorA.sigma = 1/precision,
-                    priorB.sigma = 1/precision
-                    )
+                    priorA.sigma = precision,
+                    priorB.sigma = precision
+  )
 
   if(jags.data$ncU==1)
     RE_ind <- TRUE
   if(RE_ind){
     jags.data <- c(jags.data,
-                   list(priorA.Sigma2 = 1/precision,
-                        priorB.Sigma2 = 1/precision)
-                   )
-    initial.values$prec.Sigma2 <- 1/VarCorr(tmp_model)
+                   list(priorA.Sigma2 = precision,
+                        priorB.Sigma2 = precision)
+    )
+    # initial.values$prec.Sigma2 <- 1/VarCorr(tmp_model) #lqmm
+    initial.values$prec.Sigma2 <- rep(precision, ncol(U))
   }else{
     jags.data <- c(jags.data,
-                   list(priorR.Sigma2 = diag(rep(1/precision, ncol(U))),
+                   list(priorR.Sigma2 = diag(rep(precision, ncol(U))),
                         priorK.Sigma2 = ncol(U),
                         mu0 = rep(0, ncol(U))
-                        )
                    )
-    initial.values$prec.Sigma2 <- diag(1/VarCorr(tmp_model))
+    )
+    # initial.values$prec.Sigma2 <- diag(1/VarCorr(tmp_model)) #lqmm
+    initial.values$prec.Sigma2 <- diag(rep(precision, ncol(U)))
   }
 
   #---- write jags model in txt from R function
@@ -360,7 +380,7 @@ lqmm <- function(formFixed,
     colnames(out$CIs$covariance.b) <- c("2.5%", "97.5%")
   }else{
     out$CIs$covariance.b <- cbind(as.vector(diag(out_jags$q2.5$covariance.b)),
-                                 as.vector(diag(out_jags$q97.5$covariance.b)))
+                                  as.vector(diag(out_jags$q97.5$covariance.b)))
     rownames(out$CIs$covariance.b) <- colnames(U)
     colnames(out$CIs$covariance.b) <- c("2.5%", "97.5%")
   }
@@ -369,8 +389,8 @@ lqmm <- function(formFixed,
   if(save_jagsUI)
     out$out_jagsUI <- out_jags
 
-  #---- End of the function defining the class and retruning the output
+  #---- End of the function defining the class and returning the output
   class(out) <- "Blqmm"
   out
 
-  }
+}

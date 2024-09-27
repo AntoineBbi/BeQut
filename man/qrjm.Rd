@@ -20,7 +20,8 @@ qrjm(
   n.burnin = 5000,
   n.thin = 1,
   n.adapt = 5000,
-  precision = 10,
+  object_lqmm = NULL,
+  precision = 0.1,
   C = 1000,
   save_jagsUI = TRUE,
   save_va = FALSE,
@@ -58,7 +59,9 @@ qrjm(
 
 \item{n.adapt}{integer specifying the number of iterations to use for adaptation; default is 5000}
 
-\item{precision}{variance by default for vague prior distribution}
+\item{object_lqmm}{Object returns by 'lqmm' function of BeQuT package to initialize parameter chains, default is \code{NULL}}
+
+\item{precision}{precision (e.g. inverse of variance) of prior distributions, default is 0.1}
 
 \item{C}{value used in the zero trick; default is 1000.}
 

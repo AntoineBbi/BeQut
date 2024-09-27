@@ -7,7 +7,6 @@ Description: Using a Bayesian estimation procedure, this package fits linear qua
 Depends: R (>= 3.4.1),
          survival
 Imports: jagsUI,
-         lqmm, 
          MASS
 SystemRequirements: JAGS 4.x.y
 License: GPL (>= 2.0)

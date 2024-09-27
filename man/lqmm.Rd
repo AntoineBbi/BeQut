@@ -16,7 +16,8 @@ lqmm(
   n.burnin = 5000,
   n.thin = 1,
   n.adapt = NULL,
-  precision = 10,
+  object_lqm = NULL,
+  precision = 0.1,
   save_jagsUI = TRUE,
   parallel = FALSE
 )
@@ -44,7 +45,9 @@ lqmm(
 
 \item{n.adapt}{integer specifying the number of iterations to use for adaptation; default is \code{NULL}}
 
-\item{precision}{variance by default for vague prior distribution}
+\item{object_lqm}{Object returns by 'lqm' function of BeQuT package to initialize parameter chains, default is \code{NULL}}
+
+\item{precision}{precision (inverse of variance) of prior distribution, default is 0.1}
 
 \item{save_jagsUI}{If \code{TRUE} (by default), the output of \code{jagsUI} package is returned by the function. Warning, if \code{TRUE}, the output can be large.}
 
