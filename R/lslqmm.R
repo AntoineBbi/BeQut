@@ -97,6 +97,13 @@ lslqmm <- function(formFixed,
 
   #-- To do list
   # change the example
+  # add the check on arguments
+
+  # checks of arguments
+  if(!is.null(object_lqmm) && !inherits(object_lqmm, "Blqmm"))
+    stop("The 'object_lqmm' obejct must be an \"Blqmm\" objects.")
+  if(!is.null(object_lqmm) && formFixed!=object_lqmm$control$formFixed)
+    stop("The 'formFixed' formula does not match the one from 'object_lqmm'.")
 
   #-- data management
   data_long <- data[unique(c(all.vars(formGroup),
@@ -124,23 +131,21 @@ lslqmm <- function(formFixed,
   I <- length(unique(id))
 
   # Initialization of prior parameter
-  if(!is.null(object_lqmm) && formFixed!=object_lqmm$control$formFixed)
-    stop("The 'formFixed' formula does not match the one from 'object_lqmm'.")
-  if(!is.null(object_lqmm) && formFixed==object_lqmm$control$formFixed){
+  if(!is.null(object_lqmm)){
     # prior beta parameters
     priorMean.beta <- as.vector(object_lqmm$mean$beta)
-    priorTau.beta <- if(ncX1==1) c(precision) else diag(rep((1/object_lqmm$StDev$beta^2)*precision, length(priorMean.beta)))
+    priorTau.beta <- if(ncX1==1) c(precision) else diag((1/object_lqmm$StDev$beta^2)*precision)
     # prior xi parameters
     priorMean.xi <- if(ncX2==1) c(log(object_lqmm$mean$sigma)) else c(log(object_lqmm$mean$sigma), rep(0, ncX2-1))
     priorTau.xi <- if(ncX2==1) c(1/sd(log(object_lqmm$sims.list$sigma))*precision) else diag(c(1/sd(log(object_lqmm$sims.list$sigma))*precision,
-                                                                                               rep(precision, length(priorMean.xi))))
+                                                                                               rep(precision, (length(priorMean.xi)-1) )))
     # priorTau.xi <- if(ncX2==1) c(precision) else diag(rep(precision, length(priorMean.xi)))
   }else{
     # prior beta parameters
     priorMean.beta <- rep(0, ncX1)
     priorTau.beta <- diag(rep(precision, length(priorMean.beta)))
     # prior xi parameters
-    priorMean.xi <- rep(0, ncX2)
+    priorMean.xi <- if(ncX2==1) c(0) else rep(0, ncX2)
     priorTau.xi <- if(ncX2==1) c(precision) else diag(rep(precision, length(priorMean.xi)))
   }
   # initialization of chains
@@ -181,7 +186,9 @@ lslqmm <- function(formFixed,
                    )
     )
     # update initialisation values
-    initial.values$prec.Sigma_b <- 1/object_lqmm$mean$covariance.b
+    initial.values$prec.Sigma_b <- ifelse(is.null(object_lqmm),
+                                          precision,
+                                          1/object_lqmm$mean$covariance.b)
     initial.values$prec.Sigma_u <- precision
     # define the appropriate BUGS model
     jags_code <- "model{
@@ -227,7 +234,11 @@ lslqmm <- function(formFixed,
                    )
     )
     # update initialisation values
-    initial.values$prec.Sigma_b <- 1/object_lqmm$mean$covariance.b
+    if(is.null(object_lqmm)){
+      initial.values$prec.Sigma_b <- precision
+    }else{
+      initial.values$prec.Sigma_b <- 1/object_lqmm$mean$covariance.b
+    }
     initial.values$prec.Sigma_u <- diag(precision, ncZ2)
     # define the appropriate BUGS model
     jags_code <- "model{
@@ -269,7 +280,11 @@ lslqmm <- function(formFixed,
                    )
     )
     # update initialisation values
-    initial.values$prec.Sigma_b <- solve(object_lqmm$mean$covariance.b)
+    if(is.null(object_lqmm)){
+      initial.values$prec.Sigma_b <- diag(precision, ncol(Z1))
+    }else{
+      initial.values$prec.Sigma_b <- solve(object_lqmm$mean$covariance.b)
+    }
     initial.values$prec.Sigma_u <- precision
     # define the appropriate BUGS model
     jags_code <- "model{
@@ -311,7 +326,11 @@ lslqmm <- function(formFixed,
                    )
     )
     # update initialisation values
-    initial.values$prec.Sigma_b <- solve(object_lqmm$mean$covariance.b)
+    if(is.null(object_lqmm)){
+      initial.values$prec.Sigma_b <- diag(precision, ncol(Z1))
+    }else{
+      initial.values$prec.Sigma_b <- solve(object_lqmm$mean$covariance.b)
+    }
     initial.values$prec.Sigma_u <- diag(precision, ncol(Z2))
     # define the appropriate BUGS model
     jags_code <- "model{
