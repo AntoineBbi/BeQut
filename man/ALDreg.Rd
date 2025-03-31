@@ -10,33 +10,39 @@ ALDreg(
   formGroup,
   formFixedScale,
   formRandomScale,
+  formFixedSkewness = NULL,
+  formRandomSkewness = NULL,
+  Skewness_link = "logit",
   data,
-  tau,
   n.chains = 3,
   n.iter = 6000,
   n.burnin = 1000,
   n.thin = 1,
   n.adapt = NULL,
-  object_lqmm = NULL,
+  object_lslqmm = NULL,
   precision = 0.1,
   save_jagsUI = TRUE,
   parallel = FALSE
 )
 }
 \arguments{
-\item{formFixed}{formula for fixed part of longitudinal submodel with response variable}
+\item{formFixed}{formula for fixed part of location regression with response variable}
 
-\item{formRandom}{formula for random part of longitudinal submodel without left formula part}
+\item{formRandom}{formula for random part of location regression without left formula part}
 
 \item{formGroup}{formula specifying the cluster variable (e.g. = ~ subject)}
 
-\item{formFixedScale}{formula for fixed part of scale regression part without left formula part}
+\item{formFixedScale}{formula for fixed part of scale regression without left formula part (log link)}
 
-\item{formRandomScale}{formula for random part of scale regression part without left formula part}
+\item{formRandomScale}{formula for random part of scale regression without left formula part  (log link)}
+
+\item{formFixedSkewness}{formula for fixed part of Skewness regression without left formula part (logit link)}
+
+\item{formRandomSkewness}{formula for random part of Skewness regression without left formula part (logit link)}
+
+\item{Skewness_link}{Considered link between the linear predictor and the skewness parameter. By default "logit", but considering only group-specific constant, the beta distribution can use as prior by specifying "beta".}
 
 \item{data}{long format dataset of observed variables}
-
-\item{tau}{skewness (vector) parameter. By default, this is a scalar between 0 and 1, but it can be a n-length vector spefifying the individual skewness.}
 
 \item{n.chains}{the number of parallel chains for the model; default is 1.}
 
@@ -48,7 +54,7 @@ ALDreg(
 
 \item{n.adapt}{integer specifying the number of iterations to use for adaptation; default is \code{NULL}}
 
-\item{object_lqmm}{Object returns by 'lqmm' or lslqmm function of BeQuT package to initialize parameter chains, default is \code{NULL}}
+\item{object_lslqmm}{Object returns by 'lslqmm' function of BeQuT package to initialize parameter chains, default is \code{NULL}}
 
 \item{precision}{precision (e.g. inverse of variance) of prior distributions, default is 0.1}
 
@@ -57,53 +63,89 @@ ALDreg(
 \item{parallel}{see \code{jagsUI::jags()} function}
 }
 \value{
-A \code{Blqmm} object is a list with the following elements:
+A \code{BALDreg} object is a list with the following elements:
 \describe{
 \item{\code{mean}}{list of posterior mean for each parameter}
 \item{\code{median}}{list of posterior median for each parameter}
 \item{\code{modes}}{list of posterior mode for each parameter}
 \item{\code{StErr}}{list of standard error for each parameter}
 \item{\code{StDev}}{list of standard deviation for each parameter}
+\item{\code{Rhat}}{list of Rhat convergence criteria for each parameter}
 \item{\code{ICs}}{list of the credibility interval at 0.95 for each parameters excepted for covariance parameters in covariance matrix of random effects. Otherwise, use save_jagsUI=TRUE to have the associated quantiles.}
 \item{\code{data}}{data included in argument}
 \item{\code{sims.list}}{list of the MCMC chains of the parameters and random effects}
 \item{\code{control}}{list of arguments giving details about the estimation}
-\item{\code{random_effect_b}}{list for each quantile including both posterior mean and posterior standard deviation of subject-specific location random effects}
-\item{\code{random_effect_u}}{list for each quantile including both posterior mean and posterior standard deviation of subject-specific scale random effects}
-\item{\code{random_effect_tau}}{list for each quantile including both posterior mean and posterior standard deviation of subject-specific skewness random effects}
+\item{\code{random_effect_b}}{list including posterior mean, posterior standard deviation and Rhat criteria of subject-specific location random effects}
+\item{\code{random_effect_u}}{list including posterior mean, posterior standard deviation and Rhat criteria of subject-specific scale random effects}
+\item{\code{random_effect_a}}{list including posterior mean, posterior standard deviation and Rhat criteria of subject-specific skewness random effects}
+\item{\code{random_effect_tau}}{only if no covariates are considered in skewness part, list including posterior mean, posterior standard deviation and Rhat criteria of subject-specific skewness random effect}
 \item{\code{out_jagsUI}}{only if \code{save_jagsUI=TRUE} in argument: list including posterior mean, median, quantiles (2.5\%, 25\%, 50\%, 75\%, 97.5\%), standart deviation for each parameter and each random effect.
 Moreover, this list also returns the MCMC draws, the Gelman and Rubin diagnostics (see output of jagsUI objects)}
 }
 }
 \description{
 Function using 'JAGS' software to estimate the individual response distribution assuming asymmetric Laplace
-distribution for residual error.
+distribution.
 }
 \examples{
 
 \donttest{
-#---- Use dataLong dataset
-data(pbc2, package = "JMbayes")
+#---- Load data
+data(threeC)
 
-#---- Fit regression model for the median
-lslqmm_median <- ALDreg(formFixed = log(serBilir) ~ year,
-                        formRandom = ~ year,
-                        formFixedScale = ~ year,
-                        formRandomScale = ~ year,
-                        formGroup = ~ id,
-                        data = pbc2,
-                        tau = 0.5,
-                        n.iter = 10000,
+#---- data management
+threeC$age.visit65 <- (threeC$age.visit-65)/10
+threeC$age.final65 <- (threeC$age.final-65)/10
+threeC$age0_65 <- (threeC$age0-65)/10
+threeC$age.last65 <- (threeC$age.last-65)/10
+threeC$age.first65 <- (threeC$age.first-65)/10
+threeC$SBP <- threeC$SBP/10
+
+#---- Fit ALD regression model with subject-specific random effect for skewness part
+model_beta <- ALDreg(formFixed = SBP ~ age.visit65,
+                        formRandom = ~ age.visit65,
+                        formFixedScale = ~ age.visit65,
+                        formRandomScale = ~ age.visit65,
+                        formGroup = ~ ID,
+                        Skewness_link = "beta",
+                        data = threeC,
+                        n.iter = 3000,
+                        n.burnin = 1000)
+
+#---- Fit ALD regression model with subject-specific random effect for skewness part
+model_intercept <- ALDreg(formFixed = SBP ~ age.visit65,
+                        formRandom = ~ age.visit65,
+                        formFixedScale = ~ age.visit65,
+                        formRandomScale = ~ age.visit65,
+                        formGroup = ~ ID,
+                        Skewness_link = "logit",
+                        data = threeC,
+                        n.iter = 3000,
                         n.burnin = 1000)
 
 #---- Get the posterior means
-lslqmm_median$mean
+model_intercept$mean
+
+#---- Get the posterior prediction of subject-specific skewness part
+model_intercept$out$random_effect_tau$postMeans
 
 #---- Visualize the trace for beta parameters
-jagsUI::traceplot(lslqmm_median$out_jagsUI, parameters = "beta")
+jagsUI::traceplot(model_intercept$out_jagsUI, parameters = "beta")
 
 #---- Summary of output
-summary(lslqmm_median)
+summary(model_intercept)
+
+#---- Fit full ALD regression model with subject-specific random effect defining all parts
+model_full <- ALDreg(formFixed = SBP ~ age.visit65,
+                     formRandom = ~ age.visit65,
+                     formFixedScale = ~ age.visit65,
+                     formRandomScale = ~ age.visit65,
+                     formFixedSkewness = ~ age.visit65,
+                     formRandomSkewness = ~ age.visit65,
+                     formGroup = ~ ID,
+                     data = threeC,
+                     n.iter = 3000,
+                     n.burnin = 1000)
 }
 
 }
