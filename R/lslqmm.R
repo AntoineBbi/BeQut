@@ -28,11 +28,13 @@
 #'   \item{\code{modes}}{list of posterior mode for each parameter}
 #'   \item{\code{StErr}}{list of standard error for each parameter}
 #'   \item{\code{StDev}}{list of standard deviation for each parameter}
+#'   \item{\code{Rhat}}{list of Rhat convergence criteria for each parameter}
 #'   \item{\code{ICs}}{list of the credibility interval at 0.95 for each parameters excepted for covariance parameters in covariance matrix of random effects. Otherwise, use save_jagsUI=TRUE to have the associated quantiles.}
 #'   \item{\code{data}}{data included in argument}
 #'   \item{\code{sims.list}}{list of the MCMC chains of the parameters and random effects}
 #'   \item{\code{control}}{list of arguments giving details about the estimation}
-#'   \item{\code{random_effect}}{list for each quantile including both posterior mean and posterior standard deviation of subject-specific random effects}
+#'   \item{\code{random_effect_b}}{list for each quantile including both posterior mean and posterior standard deviation of subject-specific location random effects}
+#'   \item{\code{random_effect_u}}{list for each quantile including both posterior mean and posterior standard deviation of subject-specific scale random effects}
 #'   \item{\code{out_jagsUI}}{only if \code{save_jagsUI=TRUE} in argument: list including posterior mean, median, quantiles (2.5%, 25%, 50%, 75%, 97.5%), standart deviation for each parameter and each random effect.
 #'   Moreover, this list also returns the MCMC draws, the Gelman and Rubin diagnostics (see output of jagsUI objects)}
 #'  }
@@ -53,18 +55,26 @@
 #' @examples
 #'
 #' \donttest{
-#' #---- Use dataLong dataset
-#' data(pbc2, package = "JMbayes")
+#' #---- Load data
+#' data(threeC)
+#'
+#' #---- data management
+#' threeC$age.visit65 <- (threeC$age.visit-65)/10
+#' threeC$age.final65 <- (threeC$age.final-65)/10
+#' threeC$age0_65 <- (threeC$age0-65)/10
+#' threeC$age.last65 <- (threeC$age.last-65)/10
+#' threeC$age.first65 <- (threeC$age.first-65)/10
+#' threeC$SBP <- threeC$SBP/10
 #'
 #' #---- Fit regression model for the median
-#' lslqmm_median <- lslqmm(formFixed = log(serBilir) ~ year,
-#'                         formRandom = ~ year,
-#'                         formFixedScale = ~ year,
-#'                         formRandomScale = ~ year,
-#'                         formGroup = ~ id,
-#'                         data = pbc2,
+#' lslqmm_median <- lslqmm(formFixed = SBP ~ age.visit65,
+#'                         formRandom = ~ age.visit65,
+#'                         formFixedScale = ~ age.visit65,
+#'                         formRandomScale = ~ age.visit65,
+#'                         formGroup = ~ ID,
+#'                         data = threeC,
 #'                         tau = 0.5,
-#'                         n.iter = 10000,
+#'                         n.iter = 6000,
 #'                         n.burnin = 1000)
 #'
 #' #---- Get the posterior means
@@ -413,8 +423,10 @@ lslqmm <- function(formFixed,
   out$control <- list(formFixed = formFixed,
                       formRandom = formRandom,
                       formGroup = formGroup,
+                      formFixedScale = formFixedScale,
+                      formRandomScale = formRandomScale,
                       tau = tau,
-                      call_function = "lqmm",
+                      call_function = "lslqmm",
                       n.chains = n.chains,
                       parallel = parallel,
                       n.adapt = n.adapt,
