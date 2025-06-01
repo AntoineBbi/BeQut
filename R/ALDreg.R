@@ -173,7 +173,7 @@ ALDreg <- function(formFixed,
 
   # checks of arguments
   if(!is.null(object_lslqmm) && !inherits(object_lslqmm, "Blslqmm"))
-    stop("The 'object_lslqmm' obejct must be an \"Blslqmm\" objects.")
+    stop("The 'object_lslqmm' object must be an \"Blslqmm\" objects.")
   if(!is.null(object_lslqmm) && formFixed!=object_lslqmm$control$formFixed)
     stop("The 'formFixed' formula does not match the one from 'object_lslqmm'.")
   if(Skewness_link != "logit")
@@ -471,6 +471,11 @@ ALDreg <- function(formFixed,
     jags_code <- gsub("inprod(a[i, 1:ncZ3], Z3[j, 1:ncZ3])", rplc, jags_code, fixed = TRUE)
   }
   if(Skewness_link == "logit" && ncX3>1 && ncZ3==1){
+    jags.data <- c(jags.data,
+                   list(priorA.a = precision,
+                        priorB.a = precision,
+                        mu_a = 0
+                   ))
     # regression from X3 with alpha
     rplc <- paste(paste("alpha[", 1:jags.data$ncX3, "] * X3[j, ", 1:jags.data$ncX3, "]", sep = ""), collapse = " + ")
     jags_code <- gsub("inprod(alpha[1:ncX2], X3[j, 1:ncX3])", rplc, jags_code, fixed = TRUE)
@@ -487,10 +492,6 @@ ALDreg <- function(formFixed,
     jags_code <- gsub("covariance.a <- inverse(prec.Sigma_a[, ])",
                       "covariance.a <- 1/prec.Sigma_a",
                       jags_code, fixed = TRUE)
-    jags.data <- c(jags.data,
-                   list(priorA.a = 1,
-                        mu_a = 0
-                   ))
   }
 
 
