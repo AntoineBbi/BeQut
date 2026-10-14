@@ -15,8 +15,8 @@
 #'
 #' @author Antoine Barbieri and Baptiste Courrèges
 #'
-#' @import MASS survival
-#' @export
+#' @import survival
+#' @importFrom MASS mvrnorm
 #'
 #' @examples
 #'
