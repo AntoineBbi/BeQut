@@ -701,7 +701,7 @@ alpha.assoc ~ dnorm(0, priorTau.alphaA)
     out$out_jagsUI <- out_jags
 
   #---- End of the function defining the class and returning the output
-  class(out) <- "Bqrjm"
+  class(out) <- c("Bqrjm", "Bmm")
   out
 
 }
