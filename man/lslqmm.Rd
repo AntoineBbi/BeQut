@@ -7,9 +7,9 @@
 lslqmm(
   formFixed,
   formRandom,
-  formGroup,
   formFixedScale,
   formRandomScale,
+  formGroup,
   data,
   tau,
   n.chains = 3,
@@ -19,7 +19,6 @@ lslqmm(
   n.adapt = NULL,
   object_lqmm = NULL,
   precision = 0.1,
-  save_jagsUI = TRUE,
   parallel = FALSE
 )
 }
@@ -28,15 +27,15 @@ lslqmm(
 
 \item{formRandom}{formula for random part of longitudinal submodel without left formula part}
 
-\item{formGroup}{formula specifying the cluster variable (e.g. = ~ subject)}
-
 \item{formFixedScale}{formula for fixed part of scale regression part without left formula part}
 
 \item{formRandomScale}{formula for random part of scale regression part without left formula part}
 
+\item{formGroup}{formula specifying the cluster variable (e.g. = ~ subject)}
+
 \item{data}{long format dataset of observed variables}
 
-\item{tau}{the quantile(s) to be estimated. This must be a number between 0 and 1, otherwise the execution is stopped. If more than one quantile is specified, rounding off to the 4th decimal must give non–duplicated values of \code{tau}, otherwise the execution is stopped.}
+\item{tau}{the quantile's order to be estimated. This must be a number between 0 and 1. If tau is NULL, then the parameter tau is estimated.}
 
 \item{n.chains}{the number of parallel chains for the model; default is 1.}
 
@@ -52,27 +51,16 @@ lslqmm(
 
 \item{precision}{precision (e.g. inverse of variance) of prior distributions, default is 0.1}
 
-\item{save_jagsUI}{If \code{TRUE} (by default), the output of \code{jagsUI} package is returned by the function. Warning, if \code{TRUE}, the output can be large.}
-
 \item{parallel}{see \code{jagsUI::jags()} function}
 }
 \value{
-A \code{Blqmm} object is a list with the following elements:
+A \code{Blslqmm} object is a list with the following elements:
 \describe{
-\item{\code{mean}}{list of posterior mean for each parameter}
-\item{\code{median}}{list of posterior median for each parameter}
-\item{\code{modes}}{list of posterior mode for each parameter}
-\item{\code{StErr}}{list of standard error for each parameter}
-\item{\code{StDev}}{list of standard deviation for each parameter}
-\item{\code{Rhat}}{list of Rhat convergence criteria for each parameter}
-\item{\code{ICs}}{list of the credibility interval at 0.95 for each parameters excepted for covariance parameters in covariance matrix of random effects. Otherwise, use save_jagsUI=TRUE to have the associated quantiles.}
 \item{\code{data}}{data included in argument}
-\item{\code{sims.list}}{list of the MCMC chains of the parameters and random effects}
 \item{\code{control}}{list of arguments giving details about the estimation}
-\item{\code{random_effect_b}}{list for each quantile including both posterior mean and posterior standard deviation of subject-specific location random effects}
-\item{\code{random_effect_u}}{list for each quantile including both posterior mean and posterior standard deviation of subject-specific scale random effects}
-\item{\code{out_jagsUI}}{only if \code{save_jagsUI=TRUE} in argument: list including posterior mean, median, quantiles (2.5\%, 25\%, 50\%, 75\%, 97.5\%), standart deviation for each parameter and each random effect.
-Moreover, this list also returns the MCMC draws, the Gelman and Rubin diagnostics (see output of jagsUI objects)}
+\item{\code{jags}}{list including BUGS code and data list used by Jags, and MCMC.list returns by \code{jagsUI::jags()}}
+\item{\code{summary_table}}{Data frame returns by \code{MCMCvis::MCMCsummary()} function summarizing posterior statistics of parameter chains.}
+\item{\code{out_jagsUI}}{Object returns by \code{jagsUI::jags()} function.}
 }
 }
 \description{
@@ -94,7 +82,7 @@ threeC$age.first65 <- (threeC$age.first-65)/10
 threeC$SBP <- threeC$SBP/10
 
 #---- Fit regression model for the median
-lslqmm_median <- lslqmm(formFixed = SBP ~ age.visit65,
+fit_lslqmm <- lslqmm(formFixed = SBP ~ age.visit65,
                         formRandom = ~ age.visit65,
                         formFixedScale = ~ age.visit65,
                         formRandomScale = ~ age.visit65,
@@ -104,25 +92,21 @@ lslqmm_median <- lslqmm(formFixed = SBP ~ age.visit65,
                         n.iter = 6000,
                         n.burnin = 1000)
 
-#---- Get the posterior means
-lslqmm_median$mean
+#---- Get the posterior statistics
+fit_lslqmm$summary_table
 
 #---- Visualize the trace for beta parameters
-jagsUI::traceplot(lslqmm_median$out_jagsUI, parameters = "beta")
+jagsUI::traceplot(fit_lslqmm$jags$out_jags, parameters = "beta")
 
 #---- Summary of output
-summary(lslqmm_median)
+summary(fit_lslqmm)
 }
 
 }
 \references{
-Courcoul L, Tzourio C, Woodward M, Barbieri A, Jacqmin-Gadda H (2024).
-\emph{	A location-scale joint model for studying the link between the time-dependent subject-specific variability of blood pressure and competing events}.
-arXiv, arXiv:2306.16785. doi: https://doi.org/10.48550/arXiv.2306.16785.
-
-Marco Geraci and Matteo Bottai (2014).
-\emph{Linear quantile mixed models}.
-Statistics and Computing, 24(3):461-479. doi: 10.1007/s11222-013-9381-9.
+Barbieri A, Alcaraz A, Abed M, De Courson H, Jacqmin-Gadda H (2025).
+\emph{ Asymmetric Laplace distribution regression model for fitting heterogeneous longitudinal response}.
+arXiv:2512.12362. 2025. doi: https://doi.org/10.48550/arXiv.2512.12362.
 }
 \author{
 Antoine Barbieri

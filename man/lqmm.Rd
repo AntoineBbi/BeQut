@@ -18,7 +18,6 @@ lqmm(
   n.adapt = NULL,
   object_lqm = NULL,
   precision = 0.1,
-  save_jagsUI = TRUE,
   parallel = FALSE
 )
 }
@@ -49,25 +48,16 @@ lqmm(
 
 \item{precision}{precision (inverse of variance) of prior distribution, default is 0.1}
 
-\item{save_jagsUI}{If \code{TRUE} (by default), the output of \code{jagsUI} package is returned by the function. Warning, if \code{TRUE}, the output can be large.}
-
 \item{parallel}{see \code{jagsUI::jags()} function}
 }
 \value{
 A \code{Blqmm} object is a list with the following elements:
 \describe{
-\item{\code{mean}}{list of posterior mean for each parameter}
-\item{\code{median}}{list of posterior median for each parameter}
-\item{\code{modes}}{list of posterior mode for each parameter}
-\item{\code{StErr}}{list of standard error for each parameter}
-\item{\code{StDev}}{list of standard deviation for each parameter}
-\item{\code{ICs}}{list of the credibility interval at 0.95 for each parameters excepted for covariance parameters in covariance matrix of random effects. Otherwise, use save_jagsUI=TRUE to have the associated quantiles.}
 \item{\code{data}}{data included in argument}
-\item{\code{sims.list}}{list of the MCMC chains of the parameters and random effects}
 \item{\code{control}}{list of arguments giving details about the estimation}
-\item{\code{random_effect}}{list for each quantile including both posterior mean and posterior standard deviation of subject-specific random effects}
-\item{\code{out_jagsUI}}{only if \code{save_jagsUI=TRUE} in argument: list including posterior mean, median, quantiles (2.5\%, 25\%, 50\%, 75\%, 97.5\%), standard deviation for each parameter and each random effect.
-Moreover, this list also returns the MCMC draws, the Gelman and Rubin diagnostics (see output of jagsUI objects)}
+\item{\code{jags}}{list including BUGS code and data list used by Jags, and MCMC.list returns by \code{jagsUI::jags()}}
+\item{\code{summary_table}}{Data frame returns by \code{MCMCvis::MCMCsummary()} function summarizing posterior statistics of parameter chains.}
+\item{\code{out_jagsUI}}{Object returns by \code{jagsUI::jags()} function.}
 }
 }
 \description{
@@ -77,26 +67,37 @@ distribution for residual error.
 \examples{
 
 \donttest{
-#---- Use dataLong dataset
-data(dataLong)
+#---- Load data
+data(threeC)
 
-#---- Fit regression model for the first quartile
-lqmm_075 <- lqmm(formFixed = y ~ visit,
-                 formRandom = ~ visit,
-                 formGroup = ~ ID,
-                 data = dataLong,
-                 tau = 0.75,
-                 n.iter = 10000,
-                 n.burnin = 1000)
+#---- data management
+threeC$age.visit65 <- (threeC$age.visit-65)/10
+threeC$age.final65 <- (threeC$age.final-65)/10
+threeC$age0_65 <- (threeC$age0-65)/10
+threeC$age.last65 <- (threeC$age.last-65)/10
+threeC$age.first65 <- (threeC$age.first-65)/10
+threeC$SBP <- threeC$SBP/10
 
-#---- Get the posterior means
-lqmm_075$mean
+#---- Fit regression model for the median
+fit <- lqmm(formFixed = SBP ~ age.visit65,
+            formRandom = ~ age.visit65,
+            formGroup = ~ ID,
+            data = threeC,
+            tau = 0.75,
+            n.iter = 1000,
+            n.burnin = 500)
+
+#---- Get the posterior statistics
+fit$summary_table
+
+#---- Get the summary of estimated model
+summary(fit)
 
 #---- Visualize the trace for beta parameters
-jagsUI::traceplot(lqmm_075$out_jagsUI, parameters = "beta")
+jagsUI::traceplot(fit$jags$out_jags, parameters = "beta")
 
-#---- Summary of output
-summary(lqmm_075)
+#---- Visualization of fitted quantile and its credible interval
+pred <- plot(fit, time.var = "age.visit65")
 }
 
 }

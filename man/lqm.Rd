@@ -13,7 +13,6 @@ lqm(
   n.burnin = 5000,
   n.thin = 1,
   n.adapt = NULL,
-  save_jagsUI = TRUE,
   parallel = FALSE
 )
 }
@@ -34,26 +33,16 @@ lqm(
 
 \item{n.adapt}{integer specifying the number of iterations to use for adaptation; default is \code{NULL}}
 
-\item{save_jagsUI}{If \code{TRUE} (is \code{TRUE} by default), the output of \code{jagsUI} package is return by the function}
-
 \item{parallel}{see \code{jagsUI::jags()} function}
 }
 \value{
 A \code{Blqm} object which is a list with the following elements:
 \describe{
-\item{\code{mean}}{list of posterior mean for each parameter}
-\item{\code{median}}{list of posterior median for each parameter}
-\item{\code{modes}}{list of posterior mode for each parameter}
-\item{\code{StErr}}{list of standard error for each parameter}
-\item{\code{StDev}}{list of standard deviation for each parameter}
-\item{\code{Rhat}}{Gelman and Rubin diagnostic for all parameters}
-\item{\code{ICs}}{list of the credibility interval at 0.95 for each parameters excepted for covariance parameters in covariance matrix of random effects. Otherwise, use save_jagsUI=TRUE to have the associated quantiles.}
 \item{\code{data}}{data included in argument}
-\item{\code{sims.list}}{list of the MCMC chains of the parameters and random effects}
 \item{\code{control}}{list of arguments giving details about the estimation}
-\item{\code{W}}{list including both posterior mean and posterior standard deviation of subject-specific random variable W}
-\item{\code{out_jagsUI}}{only if \code{save_jagsUI=TRUE} in argument: list including posterior mean, median, quantiles (2.5\%, 25\%, 50\%, 75\%, 97.5\%), standard deviation for each parameter and each random effect.
-Moreover, this list also returns the MCMC draws, the Gelman and Rubin diagnostics (see output of jagsUI objects)}
+\item{\code{jags}}{list including BUGS code and data list used by Jags, and MCMC.list returns by \code{jagsUI::jags()}}
+\item{\code{summary_table}}{Data frame returns by \code{MCMCvis::MCMCsummary()} function summarizing posterior statistics of parameter chains.}
+\item{\code{out_jagsUI}}{Object returns by \code{jagsUI::jags()} function.}
 }
 }
 \description{
@@ -67,20 +56,18 @@ distribution for residual error.
 data(wave)
 
 #---- Fit regression model for the first quartile
-lqm_025 <- lqm(formula = h110d~vent_vit_moy,
-               data = wave,
-               n.iter = 1000,
-               n.burnin = 500,
-               tau = 0.25)
+lqm_025 <- BeQut::lqm(formula = h110d~vent_vit_moy + pression,
+                      data = wave,
+                      n.iter = 1000,
+                      n.burnin = 500,
+                      tau = 0.25)
 
-#---- Get the posterior mean of parameters
-lqm_025$mean
+#---- Get the posterior statistics of parameters
+lqm_025$summary_table
 
-#---- Visualize the trace for beta parameters
-jagsUI::traceplot(lqm_025$out_jagsUI, parameters = "beta" )
-
-#---- Summary of output
-summary(lqm_025)
+#---- Plot the conditional first quartile
+plot.Blqm(object = lqm_025, var.x = "vent_vit_moy")
+plot.Blqm(object = lqm_025, var.x = "pression")
 }
 
 }
