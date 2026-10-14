@@ -5,11 +5,11 @@
 #'
 #' @param formFixed formula for fixed part of longitudinal submodel with response variable
 #' @param formRandom formula for random part of longitudinal submodel without left formula part
-#' @param formGroup formula specifying the cluster variable (e.g. = ~ subject)
 #' @param formFixedScale formula for fixed part of scale regression part without left formula part
 #' @param formRandomScale formula for random part of scale regression part without left formula part
+#' @param formGroup formula specifying the cluster variable (e.g. = ~ subject)
 #' @param data long format dataset of observed variables
-#' @param tau the quantile(s) to be estimated. This must be a number between 0 and 1, otherwise the execution is stopped. If more than one quantile is specified, rounding off to the 4th decimal must give non–duplicated values of \code{tau}, otherwise the execution is stopped.
+#' @param tau the quantile's order to be estimated. This must be a number between 0 and 1. If tau is NULL, then the parameter tau is estimated.
 #' @param n.chains the number of parallel chains for the model; default is 1.
 #' @param n.iter integer specifying the total number of iterations; default is 10000
 #' @param n.burnin integer specifying how many of \code{n.iter} to discard as burn-in ; default is 5000
@@ -17,38 +17,26 @@
 #' @param n.adapt integer specifying the number of iterations to use for adaptation; default is \code{NULL}
 #' @param object_lqmm Object returns by 'lqmm' function of BeQuT package to initialize parameter chains, default is \code{NULL}
 #' @param precision precision (e.g. inverse of variance) of prior distributions, default is 0.1
-#' @param save_jagsUI If \code{TRUE} (by default), the output of \code{jagsUI} package is returned by the function. Warning, if \code{TRUE}, the output can be large.
 #' @param parallel see \code{jagsUI::jags()} function
 #'
 #'
-#' @return A \code{Blqmm} object is a list with the following elements:
+#' @return A \code{Blslqmm} object is a list with the following elements:
 #'  \describe{
-#'   \item{\code{mean}}{list of posterior mean for each parameter}
-#'   \item{\code{median}}{list of posterior median for each parameter}
-#'   \item{\code{modes}}{list of posterior mode for each parameter}
-#'   \item{\code{StErr}}{list of standard error for each parameter}
-#'   \item{\code{StDev}}{list of standard deviation for each parameter}
-#'   \item{\code{Rhat}}{list of Rhat convergence criteria for each parameter}
-#'   \item{\code{ICs}}{list of the credibility interval at 0.95 for each parameters excepted for covariance parameters in covariance matrix of random effects. Otherwise, use save_jagsUI=TRUE to have the associated quantiles.}
 #'   \item{\code{data}}{data included in argument}
-#'   \item{\code{sims.list}}{list of the MCMC chains of the parameters and random effects}
 #'   \item{\code{control}}{list of arguments giving details about the estimation}
-#'   \item{\code{random_effect_b}}{list for each quantile including both posterior mean and posterior standard deviation of subject-specific location random effects}
-#'   \item{\code{random_effect_u}}{list for each quantile including both posterior mean and posterior standard deviation of subject-specific scale random effects}
-#'   \item{\code{out_jagsUI}}{only if \code{save_jagsUI=TRUE} in argument: list including posterior mean, median, quantiles (2.5%, 25%, 50%, 75%, 97.5%), standart deviation for each parameter and each random effect.
-#'   Moreover, this list also returns the MCMC draws, the Gelman and Rubin diagnostics (see output of jagsUI objects)}
+#'   \item{\code{jags}}{list including BUGS code and data list used by Jags, and MCMC.list returns by \code{jagsUI::jags()}}
+#'   \item{\code{summary_table}}{Data frame returns by \code{MCMCvis::MCMCsummary()} function summarizing posterior statistics of parameter chains.}
+#'   \item{\code{out_jagsUI}}{Object returns by \code{jagsUI::jags()} function.}
 #'  }
 #'
 #' @author Antoine Barbieri
 #'
 #' @import jagsUI
+#' @importFrom  MCMCvis MCMCsummary
 #'
-#' @references Courcoul L, Tzourio C, Woodward M, Barbieri A, Jacqmin-Gadda H (2024).
-#' \emph{	A location-scale joint model for studying the link between the time-dependent subject-specific variability of blood pressure and competing events}.
-#' arXiv, arXiv:2306.16785. doi: https://doi.org/10.48550/arXiv.2306.16785.
-#' @references Marco Geraci and Matteo Bottai (2014).
-#' \emph{Linear quantile mixed models}.
-#' Statistics and Computing, 24(3):461-479. doi: 10.1007/s11222-013-9381-9.
+#' @references Barbieri A, Alcaraz A, Abed M, De Courson H, Jacqmin-Gadda H (2025).
+#' \emph{ Asymmetric Laplace distribution regression model for fitting heterogeneous longitudinal response}.
+#' arXiv:2512.12362. 2025. doi: https://doi.org/10.48550/arXiv.2512.12362.
 #'
 #' @export
 #'
@@ -67,7 +55,7 @@
 #' threeC$SBP <- threeC$SBP/10
 #'
 #' #---- Fit regression model for the median
-#' lslqmm_median <- lslqmm(formFixed = SBP ~ age.visit65,
+#' fit_lslqmm <- lslqmm(formFixed = SBP ~ age.visit65,
 #'                         formRandom = ~ age.visit65,
 #'                         formFixedScale = ~ age.visit65,
 #'                         formRandomScale = ~ age.visit65,
@@ -77,21 +65,21 @@
 #'                         n.iter = 6000,
 #'                         n.burnin = 1000)
 #'
-#' #---- Get the posterior means
-#' lslqmm_median$mean
+#' #---- Get the posterior statistics
+#' fit_lslqmm$summary_table
 #'
 #' #---- Visualize the trace for beta parameters
-#' jagsUI::traceplot(lslqmm_median$out_jagsUI, parameters = "beta")
+#' jagsUI::traceplot(fit_lslqmm$jags$out_jags, parameters = "beta")
 #'
 #' #---- Summary of output
-#' summary(lslqmm_median)
+#' summary(fit_lslqmm)
 #' }
 #'
 lslqmm <- function(formFixed,
                    formRandom,
-                   formGroup,
                    formFixedScale,
                    formRandomScale,
+                   formGroup,
                    data,
                    tau,
                    n.chains = 3,
@@ -101,13 +89,8 @@ lslqmm <- function(formFixed,
                    n.adapt = NULL,
                    object_lqmm = NULL,
                    precision = 0.1,
-                   save_jagsUI = TRUE,
                    parallel = FALSE){
 
-
-  #-- To do list
-  # change the example
-  # add the check on arguments
 
   # checks of arguments
   if(!is.null(object_lqmm) && !inherits(object_lqmm, "Blqmm"))
@@ -435,184 +418,21 @@ lslqmm <- function(formFixed,
                       n.thin = n.thin,
                       I = I)
 
-  #- other outputs
+  # save jags information
+  out$jags <- list(jags_code = jags_code,
+                   jags.data = jags.data,
+                   out_jags = out_jags)
 
-  # sims.list output
-  out$sims.list <- out_jags$sims.list
-  out$sims.list$b <- NULL
-  out$sims.list$u <- NULL
 
-  # b random effect output
-  out$random_effect_b <- list(postMeans = out_jags$mean$b,
-                              postSd = out_jags$sd$b,
-                              Rhat = out_jags$Rhat$b)
-  colnames(out$random_effect_b$postMeans) <-
-    colnames(out$random_effect_b$postSd) <-
-    colnames(out$random_effect_b$Rhat) <- colnames(Z1)
+  # summary output
+  parms_to_save2 <- c("beta", "xi",
+                      "covariance.b", "covariance.u")
+  out$summary_table <- MCMCvis::MCMCsummary(out$jags$out_jags$samples,
+                                            params = parms_to_save2)
 
-  # u random effect output
-  out$random_effect_u <- list(postMeans = out_jags$mean$u,
-                              postSd = out_jags$sd$u,
-                              Rhat = out_jags$Rhat$u)
-  colnames(out$random_effect_u$postMeans) <-
-    colnames(out$random_effect_u$postSd) <-
-    colnames(out$random_effect_u$Rhat) <- colnames(Z2)
-
-  # median : Posterior median of parameters
-  out$median <- out_jags$q50
-  out$median$b <- NULL
-  out$median$u <- NULL
-
-  # mean : Posterior mean of parameters
-  out$mean <- out_jags$mean
-  out$mean$b <- NULL
-  out$mean$u <- NULL
-
-  # modes of parameters
-  out$modes <- lapply(out$sims.list, function(x) {
-    m <- function(x) {
-      d <- stats::density(x, bw = "nrd", adjust = 3, n = 1000)
-      d$x[which.max(d$y)]
-    }
-    if (is.matrix(x))
-      as.array(apply(x, 2, m))
-    else{
-      if(is.array(x))
-        apply(x, c(2,3), m)
-      else m(x)
-    }
-  })
-
-  # standard error of parameters
-  out$StErr <- lapply(out$sims.list, function(x) {
-    f <- function(x) {
-      acf.x <- drop(stats::acf(x, lag.max = 0.4 * length(x), plot = FALSE)$acf)[-1]
-      acf.x <- acf.x[seq_len(rle(acf.x > 0)$lengths[1])]
-      ess <- length(x)/(1 + 2 * sum(acf.x))
-      sqrt(stats::var(x)/ess)
-    }
-    if (is.matrix(x))
-      as.array(apply(x, 2, f))
-    else{
-      if(is.array(x))
-        apply(x, c(2,3), f)
-      else f(x)
-    }
-  })
-
-  # standard deviation of parameters
-  out$StDev <- out_jags$sd
-  out$StDev$b <- NULL
-  out$StDev$u <- NULL
-
-  # Rhat : Gelman & Rubin diagnostic
-  out$Rhat <- out_jags$Rhat
-  out$Rhat$b <- NULL
-  out$Rhat$u <- NULL
-
-  # names
-  names(out$mean$beta) <-
-    names(out$median$beta) <-
-    names(out$modes$beta) <-
-    names(out$StErr$beta) <-
-    names(out$Rhat$beta) <-
-    names(out$StDev$beta) <- colnames(X1)
-
-  names(out$mean$xi) <-
-    names(out$median$xi) <-
-    names(out$modes$xi) <-
-    names(out$StErr$xi) <-
-    names(out$Rhat$xi) <-
-    names(out$StDev$xi) <- colnames(X2)
-
-  if(ncZ1==1){
-    names(out$mean$covariance.b) <-
-      names(out$median$covariance.b) <-
-      names(out$modes$covariance.b) <-
-      names(out$StErr$covariance.b) <-
-      names(out$Rhat$covariance.b) <-
-      names(out$StDev$covariance.b) <- colnames(Z1)
-  }else{
-    colnames(out$mean$covariance.b) <-
-      rownames(out$mean$covariance.b) <-
-      colnames(out$median$covariance.b) <-
-      rownames(out$median$covariance.b) <-
-      colnames(out$modes$covariance.b) <-
-      rownames(out$modes$covariance.b) <-
-      colnames(out$Rhat$covariance.b) <-
-      rownames(out$Rhat$covariance.b) <-
-      colnames(out$StErr$covariance.b) <-
-      rownames(out$StErr$covariance.b) <-
-      colnames(out$StDev$covariance.b) <-
-      rownames(out$StDev$covariance.b) <- colnames(Z1)
-  }
-
-  if(ncZ2==1){
-    names(out$mean$covariance.u) <-
-      names(out$median$covariance.u) <-
-      names(out$modes$covariance.u) <-
-      names(out$StErr$covariance.u) <-
-      names(out$Rhat$covariance.u) <-
-      names(out$StDev$covariance.u) <- colnames(Z2)
-  }else{
-    colnames(out$mean$covariance.u) <-
-      rownames(out$mean$covariance.u) <-
-      colnames(out$median$covariance.u) <-
-      rownames(out$median$covariance.u) <-
-      colnames(out$modes$covariance.u) <-
-      rownames(out$modes$covariance.u) <-
-      colnames(out$Rhat$covariance.u) <-
-      rownames(out$Rhat$covariance.u) <-
-      colnames(out$StErr$covariance.u) <-
-      rownames(out$StErr$covariance.u) <-
-      colnames(out$StDev$covariance.u) <-
-      rownames(out$StDev$covariance.u) <- colnames(Z2)
-  }
-
-  # credible intervalles
-
-  ## beta parameters
-  out$CIs$beta <- cbind(as.vector(t(out_jags$q2.5$beta)),
-                        as.vector(t(out_jags$q97.5$beta)))
-  rownames(out$CIs$beta) <- colnames(X1)
-  colnames(out$CIs$beta) <- c("2.5%", "97.5%")
-
-  ## xi parameters
-  out$CIs$xi <- cbind(as.vector(t(out_jags$q2.5$xi)),
-                      as.vector(t(out_jags$q97.5$xi)))
-  rownames(out$CIs$xi) <- colnames(X2)
-  colnames(out$CIs$xi) <- c("2.5%", "97.5%")
-
-  # only for diagonal elements of covariance matrix of random effects
-  if(ncZ1==1){
-    out$CIs$covariance.b <- cbind(as.vector(t(out_jags$q2.5$covariance.b)),
-                                  as.vector(t(out_jags$q97.5$covariance.b)))
-    rownames(out$CIs$covariance.b) <- colnames(Z1)
-    colnames(out$CIs$covariance.b) <- c("2.5%", "97.5%")
-  }else{
-    out$CIs$covariance.b <- cbind(as.vector(diag(out_jags$q2.5$covariance.b)),
-                                  as.vector(diag(out_jags$q97.5$covariance.b)))
-    rownames(out$CIs$covariance.b) <- colnames(Z1)
-    colnames(out$CIs$covariance.b) <- c("2.5%", "97.5%")
-  }
-  if(ncZ2==1){
-    out$CIs$covariance.u <- cbind(as.vector(t(out_jags$q2.5$covariance.u)),
-                                  as.vector(t(out_jags$q97.5$covariance.u)))
-    rownames(out$CIs$covariance.u) <- colnames(Z2)
-    colnames(out$CIs$covariance.u) <- c("2.5%", "97.5%")
-  }else{
-    out$CIs$covariance.u <- cbind(as.vector(diag(out_jags$q2.5$covariance.u)),
-                                  as.vector(diag(out_jags$q97.5$covariance.u)))
-    rownames(out$CIs$covariance.u) <- colnames(Z2)
-    colnames(out$CIs$covariance.u) <- c("2.5%", "97.5%")
-  }
-
-  # save jags output if requires
-  if(save_jagsUI)
-    out$out_jagsUI <- out_jags
 
   #---- End of the function defining the class and retruning the output
-  class(out) <- "Blslqmm"
+  class(out) <-  c("Blslqmm","Bald", "Bdr", "Bmm")
   out
 
 }
