@@ -12,22 +12,19 @@ summary.Blqmm <- function (object, ...)
   cat(paste("     - Number of groups (e.g. individual): ", object$control$I, "\n"))
   cat("\n")
 
-  #---- Parameter Estimations
-  coefs <- object$mean
-  CIs <- object$CIs
-  Rhat <- object$Rhat
   # beta regression parameters
   beta_estim <- cbind(
-    "Value" = coefs$beta,
-    "2.5%" = CIs$beta[, 1],
-    "97.5%" = CIs$beta[, 2],
-    "Rhat" = Rhat$beta
+    "Value" = as.vector(object$jags$out_jags$mean$beta),
+    "2.5%" = as.vector(object$jags$out_jags$q2.5$beta),
+    "97.5%" = as.vector(object$jags$out_jags$q97.5$beta),
+    "Rhat" = as.vector(object$jags$out_jags$Rhat$beta)
   )
+  rownames(beta_estim) <- colnames(object$jags$jags.data$X)
   sigma_estim <- cbind(
-    "Value" = coefs$sigma,
-    "2.5%" = CIs$sigma[1],
-    "97.5%" = CIs$sigma[2],
-    "Rhat" = Rhat$sigma
+    "Value" = as.vector(object$jags$out_jags$mean$sigma),
+    "2.5%" = as.vector(object$jags$out_jags$q2.5$sigma),
+    "97.5%" = as.vector(object$jags$out_jags$q97.5$sigma),
+    "Rhat" = as.vector(object$jags$out_jags$Rhat$sigma)
   )
   rownames(sigma_estim) <- "sigma"
   cat("#-- Estimation of longitudinal regression parameters and their credible interval bounds: \n")
@@ -39,13 +36,16 @@ summary.Blqmm <- function (object, ...)
   # Random effects for mixed regression model
   cat("\n")
   cat("#-- (Co)variance matrix of the random-effect(s): \n")
-  if (object$control$RE_ind & is.matrix(object$mean$covariance.b)) {
-    tmp <- diag(object$mean$covariance.b)
+  if (object$control$RE_ind & is.matrix(object$jags$out_jags$mean$covariance.b)) {
+    tmp <- diag(object$jags$out_jags$mean$covariance.b)
     colnames(tmp) <-
-      rownames(tmp) <- names(object$mean$covariance.b)
+      rownames(tmp) <- colnames(object$jags$jags.data$U)
     prmatrix(tmp, na.print = "")
   }else{
-    prmatrix(object$mean$covariance.b, na.print = "")
+    tmp <- object$jags$out_jags$mean$covariance.b
+    colnames(tmp) <-
+      rownames(tmp) <- colnames(object$jags$jags.data$U)
+    prmatrix(tmp, na.print = "")
   }
 
 }
